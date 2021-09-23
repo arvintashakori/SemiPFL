@@ -33,8 +33,7 @@ class BaseNodes:
         self._init_dataloaders()
 
     def _init_dataloaders(self):
-        self.client_loaders, self.server_loaders = assign_loaders(
-            self.labels_list,
+        self.client_loaders, self.server_loaders, self.labels_list = assign_loaders(
             self.trial_number,
             self.label_ratio,
             self.number_client,

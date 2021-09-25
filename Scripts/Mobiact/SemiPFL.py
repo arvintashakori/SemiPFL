@@ -1,0 +1,165 @@
+from models import HN, Autoencoder, BASEModel
+from node import Clients
+import numpy as np
+from tqdm import trange
+import torch
+import torch.nn as nn
+import torch.utils.data
+from torchvision import transforms
+torch.manual_seed(0)
+
+
+class parameters:
+    def __init__(self):
+        self.labels_list = ['JOG', 'JUM',  'STD', 'WAL']
+        self.data_address = '/data/'
+        self.trial_number = 0
+        self.label_ratio = 0.20
+        self.number_of_client = 58
+        self.server_ID = 0
+        self.batch_size = 128
+        self.window_size = 30
+        self.width = 9
+        self.device = 'cpu'
+        self.transform = 10
+        self.total_number_of_clients = 59
+        self.learning_rate = 1e-2
+        self.steps = 5000
+        self.inner_lr = 1e-2
+        self.inner_wd = 5e-5
+
+
+def SemiPFL():
+    #initialization
+    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+    params = parameters()
+    device = torch.device(params.device)
+
+    #laoding data
+    nodes = Clients(address=params.data_address,
+                    trial_number=params.trial_number,
+                    label_ratio=params.label_ratio,
+                    number_client=params.number_of_client,
+                    server_ID=params.server_ID,
+                    batch_size=params.batch_size,
+                    window_size=params.window_size,
+                    width=params.width,
+                    transform=transform,
+                    num_user=params.total_number_of_clients)
+
+    #model initialization
+    hnet = HN()  # initializing the hypernetwork
+    AE = Autoencoder()  # initializing the autoencoder
+    model = BASEModel()  # initilizing the base model
+
+    #send models to device
+    hnet.to(device)
+    AE.to(device)
+    model.to(device)
+
+    #optimizer and loss functions
+    optimizer = torch.optim.Adam(params=hnet.parameters(), lr=params.learning_rate)
+    criteria_AE = torch.nn.BCEWithLogitsLoss()
+    criteria_model = torch.nn.CrossEntropyLoss()  # Wenwen is using NLLLoss()
+
+    #SemiPFL begins
+    step_iter = trange(params.steps)
+    results = defaultdict(list)
+    for step in step_iter:
+        hnet.train()
+        # select client at random
+        client_id = random.choice(range(params.number_client))
+
+        # produce & load local network weights
+        weights = hnet(torch.tensor([client_id], dtype=torch.long).to(device))
+        AE.load_state_dict(weights)
+
+        # init inner optimizer
+        inner_optim = torch.optim.Adam(AE.parameters(), lr=params.inner_lr, weight_decay=params.inner_wd)
+
+        # storing theta_i for later calculating delta theta
+        inner_state = OrderedDict({k: tensor.data for k, tensor in weights.items()})
+
+        # NOTE: evaluation on sent model
+        with torch.no_grad():
+            AE.eval()
+            batch = next(iter(nodes.client_unlablled_loaders[client_id]+nodes.client_lablled_loaders[client_id]))
+            sensor_values, _ = tuple(t.to(device) for t in batch)
+            predicted_sensor_values = AE(sensor_values)
+            prvs_loss = criteria_AE(predicted_sensor_values, sensor_values)
+            AE.train()
+
+        # inner updates -> obtaining theta_tilda
+        for i in range(params.inner_steps):
+            AE.train()
+            inner_optim.zero_grad()
+            optimizer.zero_grad()
+            batch = next(iter(nodes.client_unlablled_loaders[client_id]+nodes.client_lablled_loaders[client_id]))
+            sensor_values, _ = tuple(t.to(device) for t in batch)
+            predicted_sensor_values = AE(sensor_values)
+            loss = criteria_AE(predicted_sensor_values, sensor_values)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(AE.parameters(), 50)
+            inner_optim.step()
+        optimizer.zero_grad()
+        final_state = AE.state_dict()
+        # calculating delta theta
+        delta_theta = OrderedDict({k: inner_state[k] - final_state[k] for k in weights.keys()})
+        # calculating phi gradient
+        hnet_grads = torch.autograd.grad(list(weights.values()), hnet.parameters(), grad_outputs=list(delta_theta.values()))
+        # update hnet weights
+        for p, g in zip(hnet.parameters(), hnet_grads):
+            p.grad = g
+        torch.nn.utils.clip_grad_norm_(hnet.parameters(), 50)
+        optimizer.step()
+        step_iter.set_description(f"Step: {step+1}, Node ID: {node_id}, Loss: {prvs_loss:.4f}")
+
+        # transform the server dataset using the user autoencoder
+        # train a model on  transformed dataset in server side
+        for i in range(inner_steps):
+            user_model = model.train()
+            inner_optim.zero_grad()
+            optimizer.zero_grad()
+            batch = next(iter(nodes.train_loaders[num_nodes-1]))
+            img, label = tuple(t.to(device) for t in batch)
+            encoded_server_data = AE.encoder(img)
+            pred = user_model(encoded_server_data)
+            loss = criteria_model(pred, label)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(user_model.parameters(), 50)
+            inner_optim.step()
+        optimizer.zero_grad()
+
+        with torch.no_grad():
+            user_model.eval()
+            batch = next(iter(nodes.test_loaders[node_id]))
+            img, label = tuple(t.to(device) for t in batch)
+            pred = user_model(img)
+            prvs_loss = criteria(pred, label)
+            user_model.train()
+
+
+        # fine-tune the model on user labeled dataset
+        for params in user_model.parameters():
+            params.requires_grad = False
+
+        user_model.fc2 = nn.Linear(32, 10)
+
+        for i in range(inner_steps):
+            inner_optim.zero_grad()
+            optimizer.zero_grad()
+            batch = next(iter(nodes.train_loaders[node_id]))
+            img, label = tuple(t.to(device) for t in batch)
+            encoded_server_data = AE.encoder(img)
+            pred = user_model(encoded_server_data)
+            loss = criteria_model(pred, label)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(user_model.parameters(), 50)
+            inner_optim.step()
+        optimizer.zero_grad()
+        print(loss)
+
+        # Evaluate the model on user dataset
+
+
+SemiPFL()

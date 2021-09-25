@@ -1,5 +1,7 @@
 from torch.utils.data.dataset import Dataset
-import random, itertools, torch
+import random
+import itertools
+import torch
 import numpy as np
 
 
@@ -27,7 +29,8 @@ class DatasetFromNPY(Dataset):
         # single_adl_label = char_label.index(single_adl_label)
         # 读取所有像素值，并将 1D array ([784]) reshape 成为 2D array ([28,28])
         # x=self.data.iloc[index][0:9]
-        adl_as_np = np.asarray(self.data[index, :]).reshape(self.height, self.width).astype(float)
+        adl_as_np = np.asarray(self.data[index, :]).reshape(
+            self.height, self.width).astype(float)
         # 把 numpy array 格式的图像转换成灰度 PIL image
         # img_as_img = Image.fromarray(ADL_as_np)
         # img_as_img = ADL_as_np.convert('L')
@@ -44,9 +47,10 @@ class DatasetFromNPY(Dataset):
         return self.data.shape[0]
 
 
-def assign_loaders(trial_number, label_ratio, number_client, server_ID, batch_size, windowsize, width,
+def assign_loaders(address, trial_number, label_ratio, number_client, server_ID, batch_size, windowsize, width,
                    transform, num_user):
-    server_data=np.load(str(server_ID) + 'trail_' + str(trial_number) + '.npy', mmap_mode='r')
+    server_data = np.load(address + str(server_ID) + 'trail_'
+                          + str(trial_number) + '.npy', mmap_mode='r')
     server_loaders = DatasetFromNPY(server_data,
                                     width, windowsize, transform)  # load test dataset
     labels_list = np.unique(server_data[:, windowsize * width])
@@ -54,15 +58,20 @@ def assign_loaders(trial_number, label_ratio, number_client, server_ID, batch_si
     num_user_list = random.sample(num_user_list, number_client)
     client_data = []
     for user in num_user_list:
-        file_name = str(user) + 'trail_' + str(trial_number) + '.npy'
+        file_name = address + str(user) + 'trail_' + str(trial_number) + '.npy'
         client_data.append(np.load(file_name, mmap_mode='r'))
     client_data = np.array(list(itertools.chain.from_iterable(client_data)))
     client_unlablled = client_data[0:int(client_data.shape[0] * label_ratio)]
-    client_lablled = client_data[-int(client_data.shape[0] * (1 - label_ratio)):-1]
-    client_lablled_loaders = DatasetFromNPY(client_lablled, width, windowsize, transform)
-    client_unlablled_loaders = DatasetFromNPY(client_unlablled, width, windowsize, transform)
-    server_loaders = torch.utils.data.DataLoader(server_loaders, batch_size=batch_size, shuffle=True)
-    client_lablled_loaders = torch.utils.data.DataLoader(client_lablled_loaders, batch_size=batch_size, shuffle=True)
+    client_lablled = client_data[-int(client_data.shape[0]
+                                      * (1 - label_ratio)):-1]
+    client_lablled_loaders = DatasetFromNPY(
+        client_lablled, width, windowsize, transform)
+    client_unlablled_loaders = DatasetFromNPY(
+        client_unlablled, width, windowsize, transform)
+    server_loaders = torch.utils.data.DataLoader(
+        server_loaders, batch_size=batch_size, shuffle=True)
+    client_lablled_loaders = torch.utils.data.DataLoader(
+        client_lablled_loaders, batch_size=batch_size, shuffle=True)
     client_unlablled_loaders = torch.utils.data.DataLoader(client_unlablled_loaders, batch_size=batch_size,
                                                            shuffle=True)
 

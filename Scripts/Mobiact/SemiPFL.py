@@ -194,4 +194,5 @@ def SemiPFL():
             prvs_loss = criteria_model(predicted_activity, activity)
             user_model.train()
 
+
 SemiPFL()

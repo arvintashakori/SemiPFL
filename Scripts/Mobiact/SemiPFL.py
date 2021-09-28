@@ -14,7 +14,7 @@ torch.manual_seed(0)
 class parameters:
     def __init__(self):
         self.labels_list = ['JOG', 'JUM',  'STD', 'WAL']
-        self.data_address = '/data/'
+        self.data_address = './data/'
         self.trial_number = 0
         self.label_ratio = 0.20
         self.number_of_client = 58
@@ -36,7 +36,7 @@ class parameters:
         self.AEl1 = 128
         self.AEl2 = 64
         self.latent_rep = 32
-        self.modell1 = 16
+        self.modell1 = 128
         self.drop = 0.8
 
 
@@ -51,20 +51,19 @@ def SemiPFL():
     nodes = Clients(address=params.data_address,
                     trial_number=params.trial_number,
                     label_ratio=params.label_ratio,
-                    number_client=params.number_of_client,
+                    #number_client=params.number_of_client,
                     server_ID=params.server_ID,
-                    batch_size=params.batch_size,
+                    #batch_size=params.batch_size,
                     window_size=params.window_size,
                     width=params.width,
                     transform=transform,
                     num_user=params.total_number_of_clients)
 
     #model initialization
-    hnet = HN()  # initializing the hypernetwork
-    AE = Autoencoder(input_size=params.window_size * params.width, l1=params.AEl1,
-                     l2=params.AEl2, latent_rep=params.latent_rep)  # initializing the autoencoder
-    model = BASEModel(latent_rep=params.latent_rep, l=params.modell1, out_dim=len(
-        params.labels_list), drop=params.drop)  # initilizing the base model
+    hnet = HN(n_nodes=params.number_of_client, embedding_dim=int(
+        1 + params.number_of_client / 4))  # initializing the hypernetwork
+    AE = Autoencoder()  # initializing the autoencoder
+    model = BASEModel()  # initilizing the base model
 
     #send models to device
     hnet.to(device)
@@ -80,10 +79,10 @@ def SemiPFL():
     #SemiPFL begins
     step_iter = trange(params.steps)
     results = defaultdict(list)
-    for step in params.inner_step_for_AE:
+    for step in range(params.steps):
         hnet.train()
         # select client at random
-        client_id = random.choice(range(params.number_client))
+        client_id = random.choice(range(params.number_of_client))
 
         # produce & load local network weights
         weights = hnet(torch.tensor([client_id], dtype=torch.long).to(device))
@@ -100,22 +99,25 @@ def SemiPFL():
         # NOTE: evaluation on sent model
         with torch.no_grad():
             AE.eval()
+            dataloader = torch.utils.data.DataLoader(
+                nodes.client_loaders[client_id], batch_size=params.batch_size, shuffle=True)
             batch = next(iter(
-                nodes.client_unlablled_loaders[client_id]+nodes.client_lablled_loaders[client_id]))
+                dataloader))
             sensor_values, _ = tuple(t.to(device) for t in batch)
-            predicted_sensor_values = AE(sensor_values)
+            predicted_sensor_values = AE(sensor_values.float())
             prvs_loss = criteria_AE(predicted_sensor_values, sensor_values)
             AE.train()
 
         # inner updates -> obtaining theta_tilda
+        dataloader = torch.utils.data.DataLoader(
+            nodes.client_loaders[client_id], batch_size=params.batch_size, shuffle=True)
         for i in range(params.inner_step_server_finetune):
             AE.train()
             inner_optim.zero_grad()
             optimizer.zero_grad()
-            batch = next(iter(
-                nodes.client_unlablled_loaders[client_id]+nodes.client_lablled_loaders[client_id]))
+            batch = next(iter(dataloader))
             sensor_values, _ = tuple(t.to(device) for t in batch)
-            predicted_sensor_values = AE(sensor_values)
+            predicted_sensor_values = AE(sensor_values.float())
             loss = criteria_AE(predicted_sensor_values, sensor_values)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(AE.parameters(), 50)
@@ -141,13 +143,15 @@ def SemiPFL():
 
         # transform the server dataset using the user autoencoder
         # train a model on  transformed dataset in server side
+        dataloader = torch.utils.data.DataLoader(
+            nodes.server_loaders, batch_size=params.batch_size, shuffle=True)
         for i in range(params.inner_step_for_server):
             user_model = model.train()
             inner_optim.zero_grad()
             optimizer.zero_grad()
-            batch = next(iter(nodes.train_loaders[-1]))
+            batch = next(iter(dataloader))
             sensor_values, activity = tuple(t.to(device) for t in batch)
-            encoded_sensor_values = AE.encoder(sensor_values)
+            encoded_sensor_values = AE.encoder(sensor_values.float())
             predicted_activity = user_model(encoded_sensor_values)
             loss = criteria_model(predicted_activity, activity)
             loss.backward()
@@ -156,10 +160,12 @@ def SemiPFL():
         optimizer.zero_grad()
 
         with torch.no_grad():
+            dataloader = torch.utils.data.DataLoader(
+                nodes.client_loaders[client_id], batch_size=params.batch_size, shuffle=True)
             user_model.eval()
-            batch = next(iter(nodes.test_loaders[client_id]))
+            batch = next(iter(dataloader))
             sensor_values, activity = tuple(t.to(device) for t in batch)
-            encoded_sensor_values = AE.encoder(sensor_values)
+            encoded_sensor_values = AE.encoder(sensor_values.float())
             predicted_activity = user_model(encoded_sensor_values)
             prvs_loss = criteria_model(predicted_activity, activity)
             user_model.train()
@@ -168,12 +174,15 @@ def SemiPFL():
         for params in user_model.parameters():
             params.requires_grad = False
 
-        user_model.fc2 = nn.Linear(params.modell1, len(params.labels_list))
+        user_model.fc2 = nn.Linear(9 * 30 * 4, 20)
 
+        print(len(nodes.client_labeled_loaders))
+        dataloader = torch.utils.data.DataLoader(
+            nodes.client_labeled_loaders[client_id], batch_size=params.batch_size, shuffle=True)
         for i in range(params.inner_step_for_client):
             inner_optim.zero_grad()
             optimizer.zero_grad()
-            batch = next(iter(nodes.train_loaders[client_id]))
+            batch = next(iter(dataloader))
             sensor_values, activity = tuple(t.to(device) for t in batch)
             encoded_sensor_values = AE.encoder(sensor_values)
             predicted_activity = user_model(encoded_sensor_values)
@@ -186,8 +195,10 @@ def SemiPFL():
 
         # Evaluate the model on user dataset
         with torch.no_grad():
+            dataloader = torch.utils.data.DataLoader(
+                nodes.client_labeled_loaders[client_id], batch_size=params.batch_size, shuffle=True)
             user_model.eval()
-            batch = next(iter(nodes.test_loaders[client_id]))
+            batch = next(iter(dataloader))
             sensor_values, activity = tuple(t.to(device) for t in batch)
             encoded_sensor_values = AE.encoder(sensor_values)
             predicted_activity = user_model(encoded_sensor_values)

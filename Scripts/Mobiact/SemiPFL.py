@@ -169,14 +169,14 @@ def SemiPFL():
             predicted_activity = user_model(encoded_sensor_values)
             prvs_loss = criteria_model(predicted_activity, activity)
             user_model.train()
+        print(prvs_loss)
 
         # fine-tune the model on user labeled dataset
-        for params in user_model.parameters():
-            params.requires_grad = False
+        for param in user_model.parameters():
+            param.requires_grad = False
 
-        user_model.fc2 = nn.Linear(9 * 30 * 4, 20)
+        user_model.fc2 = nn.Linear(128, 20)
 
-        print(len(nodes.client_labeled_loaders))
         dataloader = torch.utils.data.DataLoader(
             nodes.client_labeled_loaders[client_id], batch_size=params.batch_size, shuffle=True)
         for i in range(params.inner_step_for_client):
@@ -184,7 +184,7 @@ def SemiPFL():
             optimizer.zero_grad()
             batch = next(iter(dataloader))
             sensor_values, activity = tuple(t.to(device) for t in batch)
-            encoded_sensor_values = AE.encoder(sensor_values)
+            encoded_sensor_values = AE.encoder(sensor_values.float())
             predicted_activity = user_model(encoded_sensor_values)
             loss = criteria_model(predicted_activity, activity)
             loss.backward()
@@ -200,10 +200,11 @@ def SemiPFL():
             user_model.eval()
             batch = next(iter(dataloader))
             sensor_values, activity = tuple(t.to(device) for t in batch)
-            encoded_sensor_values = AE.encoder(sensor_values)
+            encoded_sensor_values = AE.encoder(sensor_values.float())
             predicted_activity = user_model(encoded_sensor_values)
             prvs_loss = criteria_model(predicted_activity, activity)
             user_model.train()
+        print(prvs_loss)
 
 
 SemiPFL()

@@ -34,7 +34,7 @@ class Clients:
         self._init_dataloaders()
 
     def _init_dataloaders(self):
-        self.client_lablled_loaders, self.client_loaders, self.server_loaders, self.labels_list = assign_loaders(
+        self.client_labeled_loaders, self.client_loaders, self.server_loaders, self.labels_list = assign_loaders(
             self.address,
             self.trial_number,
             self.label_ratio,

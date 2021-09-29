@@ -23,7 +23,12 @@ class parameters:
         self.window_size = 30  # window size
         self.width = 9  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
         self.n_kernels = 16  # number of kernels for hypernetwork
+<<<<<<< HEAD
         self.device = 'cuda' # device which we run the simulation use 'cuda' if gpu available otherwise 'cpu'
+=======
+        # device which we run the simulation use 'cuda' if gpu available otherwise 'cpu'
+        self.device = 'cpu'
+>>>>>>> 7d13d21be5c0fb71c854d7a37f35c531945331e2
         # total number of subjects (client + server)
         self.total_number_of_clients = 59
         self.learning_rate = 1e-3  # learning rate for optimizer

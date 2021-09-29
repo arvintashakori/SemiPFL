@@ -61,7 +61,7 @@ class HN(nn.Module):
             "conv2.bias": self.conv2_bias(features).view(-1),
             "t_conv1.weight": self.t_conv1_weights(features).view(self.latent_rep, self.n_kernels, self.n_kernels_dec, self.n_kernels_dec),
             "t_conv1.bias": self.t_conv1_bias(features).view(-1),
-            "t_conv2.weight": self.t_conv2_weights(features).view(self.n_kernels, self.in_channels, self.n_kernels_dec, self.n_kernels_dec),
+            "t_conv2.weight": self.t_conv2_weights(features).view(self.n_kernels, self.in_channels, 1, self.n_kernels_dec),
             "t_conv2.bias": self.t_conv2_bias(features).view(-1)
         })
         return weights

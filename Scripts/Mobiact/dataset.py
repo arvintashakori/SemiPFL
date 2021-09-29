@@ -59,14 +59,17 @@ def assign_loaders(address, trial_number, label_ratio, server_ID, windowsize, wi
     client_dataset = []
     client_lablled_dataset = []
     for user in range(num_user):
-        file_name = address + 'user' + str(user) + 'trail_' + str(trial_number) + '.npy'
+        file_name = address + 'user' + \
+            str(user) + 'trail_' + str(trial_number) + '.npy'
         client_data = np.load(file_name, mmap_mode='r')
         client_dataset.append(
             DatasetFromNPY(client_data, width, windowsize, transform))  # load 59 users' data into client_dataset
         # client_data = np.array(list(itertools.chain.from_iterable(client_data)))
         # client_unlablled = client_data[0:int(client_data.shape[0] * label_ratio)]
-        client_lablled = client_data[-int(client_data.shape[0] * (1 - label_ratio)):-1]
-        client_lablled_dataset.append(DatasetFromNPY(client_lablled, width, windowsize, transform))
+        client_lablled = client_data[-int(client_data.shape[0]
+                                          * (1 - label_ratio)):-1]
+        client_lablled_dataset.append(DatasetFromNPY(
+            client_lablled, width, windowsize, transform))
     # server_loaders = torch.utils.data.DataLoader(
     #     server_loaders, batch_size=batch_size, shuffle=True)
     return client_dataset, client_lablled_dataset, server_loaders, labels_list

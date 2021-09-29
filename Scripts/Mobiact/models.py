@@ -8,7 +8,7 @@ from torch.nn.utils import spectral_norm
 class HN(nn.Module):
     def __init__(
             self, n_nodes, embedding_dim, in_channels=1, out_dim=4, n_kernels=16, hidden_dim=100,
-            spec_norm=False, n_hidden=1, n_kernels_enc=3, n_kernels_dec=1, latent_rep=4, stride_value=1, padding_value=1):
+            spec_norm=False, n_hidden=1, n_kernels_enc=3, n_kernels_dec=3, latent_rep=4, stride_value=1, padding_value=1):
         super().__init__()
         self.in_channels = in_channels
         self.out_dim = out_dim
@@ -61,7 +61,7 @@ class HN(nn.Module):
             "conv2.bias": self.conv2_bias(features).view(-1),
             "t_conv1.weight": self.t_conv1_weights(features).view(self.latent_rep, self.n_kernels, self.n_kernels_dec, self.n_kernels_dec),
             "t_conv1.bias": self.t_conv1_bias(features).view(-1),
-            "t_conv2.weight": self.t_conv2_weights(features).view(self.n_kernels, self.in_channels, 1, self.n_kernels_dec),
+            "t_conv2.weight": self.t_conv2_weights(features).view(self.n_kernels, self.in_channels, self.n_kernels_dec, self.n_kernels_dec),
             "t_conv2.bias": self.t_conv2_bias(features).view(-1)
         })
         return weights
@@ -69,7 +69,7 @@ class HN(nn.Module):
 
 class Autoencoder(nn.Module):
     def __init__(self, inout_channels=1, hidden=16, n_kernels_enc=3,
-                 n_kernels_dec=1, latent_rep=4, stride_value=1, padding_value=1):
+                 n_kernels_dec=3, latent_rep=4, stride_value=1, padding_value=1):
         super(Autoencoder, self).__init__()
         # Encoder
         self.conv1 = nn.Conv2d(inout_channels, hidden,
@@ -78,9 +78,9 @@ class Autoencoder(nn.Module):
             hidden, latent_rep, n_kernels_enc, padding=padding_value)
         # Decoder
         self.t_conv1 = nn.ConvTranspose2d(
-            latent_rep, hidden, n_kernels_dec, stride=stride_value)
+            latent_rep, hidden, kernel_size=(n_kernels_dec, n_kernels_dec), stride=stride_value)
         self.t_conv2 = nn.ConvTranspose2d(
-            hidden, inout_channels, n_kernels_dec, stride=stride_value)
+            hidden, inout_channels, kernel_size=(n_kernels_dec, n_kernels_dec), stride=stride_value)
 
     def encoder(self, x):
         z = F.relu(self.conv1(x))

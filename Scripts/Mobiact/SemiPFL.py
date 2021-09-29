@@ -3,6 +3,7 @@ from collections import OrderedDict, defaultdict
 from node import Clients
 from tqdm import trange
 import torch
+import pandas as pd
 import random
 import torch.nn as nn
 import torch.utils.data
@@ -22,11 +23,11 @@ class parameters:
         self.window_size = 30  # window size
         self.width = 9  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
         self.n_kernels = 16  # number of kernels for hypernetwork
-        self.device = 'cpu'  # device which we run the simulation
+        self.device = 'cpu'  # device which we run the simulation use 'cuda' if gpu available otherwise 'cpu'
         # total number of subjects (client + server)
         self.total_number_of_clients = 59
         self.learning_rate = 1e-2  # learning rate for optimizer
-        self.steps = 5000  # total number of epochs
+        self.steps = 1000  # total number of epochs
         self.inner_step_for_AE = 100  # number of steps to fine tunne the Autoencoder
         # number of steps in the server side to finetune
         self.inner_step_server_finetune = 100
@@ -37,22 +38,21 @@ class parameters:
         self.inner_wd = 5e-5  # weight decay
         self.inout_channels = 1
         self.hidden = 16  # Autoencoder layer 2 parameters
-        self.n_kernels_enc = 3
-        self.hidden_dim_for_HN = 100
-        self.n_kernels_dec = 1
-        self.latent_rep = 4
-        self.n_hidden_HN = 1
-        self.stride_value = 1
-        self.padding_value = 1
-        self.model_hidden_layer = 128
-        self.spec_norm = False
+        self.n_kernels_enc = 3 # autoencoder encoder kernel size
+        self.hidden_dim_for_HN = 100 # hidden dimension for hypernetwork
+        self.n_kernels_dec = 1 # autoencoder decoder kernel size
+        self.latent_rep = 4 # latent reperesentation size
+        self.n_hidden_HN = 1 # number of hidden layers in hypernetworks
+        self.stride_value = 1 # stride value for autoencoder
+        self.padding_value = 1 # padding value for autoencoder
+        self.model_hidden_layer = 128 # final model hidden layer size
+        self.spec_norm = False # True if you want to use spectral norm
 
 
-def SemiPFL():
+def SemiPFL(params):
     # initialization
     transform = transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
-    params = parameters()
     device = torch.device(params.device)
 
     # laoding data
@@ -115,11 +115,11 @@ def SemiPFL():
                 dataloader))
             sensor_values, _ = tuple(t.to(device) for t in batch)
             predicted_sensor_values = AE(sensor_values.float())
-            prvs_loss = criteria_AE(
+            prvs_loss_for_AE = criteria_AE(
                 predicted_sensor_values, sensor_values.float())
             AE.train()
-            print(
-                f"AE Step: {step+1}, Node ID: {client_id}, Loss: {prvs_loss:.4f}")
+            #print(
+            #    f"AE Step: {step+1}, Node ID: {client_id}, Loss: {prvs_loss:.4f}")
 
         # inner updates -> obtaining theta_tilda
         dataloader = torch.utils.data.DataLoader(
@@ -178,16 +178,15 @@ def SemiPFL():
             sensor_values, activity = tuple(t.to(device) for t in batch)
             encoded_sensor_values = AE.encoder(sensor_values.float())
             predicted_activity = user_model(encoded_sensor_values)
-            prvs_loss = criteria_model(predicted_activity, activity)
+            prvs_loss_server_model = criteria_model(predicted_activity, activity)
             user_model.train()
-        print(
-            f"SPFL generated model Step: {step+1}, Node ID: {client_id}, Loss: {prvs_loss:.4f}")
+        #print(f"SPFL generated model Step: {step+1}, Node ID: {client_id}, Loss: {prvs_loss:.4f}")
 
         # fine-tune the model on user labeled dataset
         for param in user_model.parameters():
             param.requires_grad = False
 
-        user_model.fc2 = nn.Linear(128, 20)
+        user_model.fc2 = nn.Linear(128, 20).to(device)
 
         dataloader = torch.utils.data.DataLoader(
             nodes.client_labeled_loaders[client_id], batch_size=params.batch_size, shuffle=True)
@@ -213,10 +212,22 @@ def SemiPFL():
             sensor_values, activity = tuple(t.to(device) for t in batch)
             encoded_sensor_values = AE.encoder(sensor_values.float())
             predicted_activity = user_model(encoded_sensor_values)
-            prvs_loss = criteria_model(predicted_activity, activity)
+            prvs_loss_fine_tuned = criteria_model(predicted_activity, activity)
             user_model.train()
         step_iter.set_description(
-            f"SemiPFL fine tuned Step: {step+1}, Node ID: {client_id}, Loss: {prvs_loss:.4f}")
+            f"Step: {step+1}, Node ID: {client_id}, AE loss: {prvs_loss_for_AE:.4f}, Server model loss: {prvs_loss_server_model:.4f}, User fine tuned loss: {prvs_loss_fine_tuned:.4f}\n")
+
+        # save results
+        results['Step'].append(step+1)
+        results['Node ID'].append(client_id)
+        results['AE loss'].append(prvs_loss_for_AE.item())
+        results['Server model loss'].append(prvs_loss_server_model.item())
+        results['Client fine tuned loss'].append(prvs_loss_fine_tuned.item())
+
+    return results
 
 
-SemiPFL()
+if __name__ == '__main__':
+    params = parameters()
+    result = SemiPFL(params = params)
+    pd.DataFrame.from_dict(result, orient="columns").to_csv("results.csv")

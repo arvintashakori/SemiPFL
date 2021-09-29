@@ -26,15 +26,15 @@ class parameters:
         self.device = 'cpu'  # device which we run the simulation use 'cuda' if gpu available otherwise 'cpu'
         # total number of subjects (client + server)
         self.total_number_of_clients = 59
-        self.learning_rate = 1e-2  # learning rate for optimizer
-        self.steps = 1000  # total number of epochs
+        self.learning_rate = 1e-3  # learning rate for optimizer
+        self.steps = 5000  # total number of epochs
         self.inner_step_for_AE = 100  # number of steps to fine tunne the Autoencoder
         # number of steps in the server side to finetune
         self.inner_step_server_finetune = 100
         # number of steps that server fine tune its hn and user embedding parameters
         self.inner_step_for_server = 100
         self.inner_step_for_client = 100  # number of steps that user fine tune its model
-        self.inner_lr = 1e-2  # user learning rate
+        self.inner_lr = 1e-3  # user learning rate
         self.inner_wd = 5e-5  # weight decay
         self.inout_channels = 1
         self.hidden = 16  # Autoencoder layer 2 parameters
@@ -67,7 +67,7 @@ def SemiPFL(params):
 
     # model initialization
     hnet = HN(n_nodes=params.number_of_client, embedding_dim=int(1 + params.number_of_client / 4),
-              in_channels=params.inout_channels, out_dim=len(params.labels_list), n_kernels=params.n_kernels, hidden_dim=params.hidden_dim_for_HN,
+              in_channels=params.inout_channels, out_dim=20, n_kernels=params.n_kernels, hidden_dim=params.hidden_dim_for_HN,
               spec_norm=params.spec_norm, n_hidden=params.n_hidden_HN, n_kernels_enc=params.n_kernels_enc, n_kernels_dec=params.n_kernels_dec, latent_rep=params.latent_rep, stride_value=params.stride_value, padding_value=params.padding_value)  # initializing the hypernetwork
     AE = Autoencoder(inout_channels=params.inout_channels, hidden=params.hidden, n_kernels_enc=params.n_kernels_enc,
                      n_kernels_dec=params.n_kernels_dec, latent_rep=params.latent_rep, stride_value=params.stride_value, padding_value=params.padding_value)  # initializing the autoencoder

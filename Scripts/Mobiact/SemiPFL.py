@@ -23,14 +23,8 @@ class parameters:
         self.window_size = 30  # window size
         self.width = 9  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
         self.n_kernels = 16  # number of kernels for hypernetwork
-<<<<<<< HEAD
-        self.device = 'cuda' # device which we run the simulation use 'cuda' if gpu available otherwise 'cpu'
-=======
-        # device which we run the simulation use 'cuda' if gpu available otherwise 'cpu'
-        self.device = 'cpu'
->>>>>>> 7d13d21be5c0fb71c854d7a37f35c531945331e2
-        # total number of subjects (client + server)
-        self.total_number_of_clients = 59
+        self.device = 'cpu' # device which we run the simulation use 'cuda' if gpu available otherwise 'cpu'
+        self.total_number_of_clients = 59 # total number of subjects (client + server)
         self.learning_rate = 1e-3  # learning rate for optimizer
         self.steps = 5000  # total number of epochs
         self.inner_step_for_AE = 100  # number of steps to fine tunne the Autoencoder
@@ -41,7 +35,7 @@ class parameters:
         self.inner_step_for_client = 100  # number of steps that user fine tune its model
         self.inner_lr = 1e-3  # user learning rate
         self.inner_wd = 5e-5  # weight decay
-        self.inout_channels = 1
+        self.inout_channels = 1 # number of channels
         self.hidden = 16  # Autoencoder layer 2 parameters
         self.n_kernels_enc = 3  # autoencoder encoder kernel size
         self.hidden_dim_for_HN = 100  # hidden dimension for hypernetwork

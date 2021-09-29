@@ -78,9 +78,9 @@ class Autoencoder(nn.Module):
             hidden, latent_rep, n_kernels_enc, padding=padding_value)
         # Decoder
         self.t_conv1 = nn.ConvTranspose2d(
-            latent_rep, hidden, kernel_size=(n_kernels_dec, n_kernels_dec), stride=stride_value)
+            latent_rep, hidden, kernel_size=(n_kernels_dec, n_kernels_dec), stride=stride_value, padding=padding_value)
         self.t_conv2 = nn.ConvTranspose2d(
-            hidden, inout_channels, kernel_size=(n_kernels_dec, n_kernels_dec), stride=stride_value)
+            hidden, inout_channels, kernel_size=(n_kernels_dec, n_kernels_dec), stride=stride_value, padding=padding_value)
 
     def encoder(self, x):
         z = F.relu(self.conv1(x))

@@ -1,33 +1,51 @@
-from dataset import gen_random_loaders
+import torch
+from torchvision.transforms import transforms
 
-class BaseNodes:
+from dataset import assign_loaders
+
+torch.manual_seed(0)
+
+
+class Clients:
     def __init__(
             self,
-            data_name,
-            data_path,
-            n_nodes,
-            batch_size=128,
-            classes_per_node=2
+            address,
+            trial_number,
+            label_ratio,
+            server_ID,
+            #batch_size,
+            window_size,
+            width,
+            transform,
+            num_user  # all users we have
     ):
+        self.trial_number = trial_number
+        self.label_ratio = label_ratio
+        #self.number_client = number_client
+        self.server_ID = server_ID
+        #self.batch_size = batch_size
+        self.window_size = window_size
+        self.width = width
+        self.transform = transform
+        self.num_user = num_user
+        self.address = address
 
-        self.data_name = data_name
-        self.data_path = data_path
-        self.n_nodes = n_nodes
-        self.classes_per_node = classes_per_node
-
-        self.batch_size = batch_size
-
-        self.train_loaders, self.val_loaders, self.test_loaders = None, None, None
+        self.client_loaders, self.client_labeled_loaders, self.server_loaders = None, None, None
         self._init_dataloaders()
 
     def _init_dataloaders(self):
-        self.train_loaders, self.val_loaders, self.test_loaders = gen_random_loaders(
-            self.data_name,
-            self.data_path,
-            self.n_nodes,
-            self.batch_size,
-            self.classes_per_node
+        self.client_labeled_loaders, self.client_loaders, self.server_loaders, self.labels_list = assign_loaders(
+            self.address,
+            self.trial_number,
+            self.label_ratio,
+            #self.number_client,
+            self.server_ID,
+            #self.batch_size,
+            self.window_size,
+            self.width,
+            self.transform,
+            self.num_user
         )
 
     def __len__(self):
-        return self.n_nodes
+        return self.num_user

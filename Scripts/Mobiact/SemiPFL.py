@@ -23,17 +23,17 @@ class parameters:
         self.window_size = 30  # window size
         self.width = 9  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
         self.n_kernels = 16  # number of kernels for hypernetwork
-        self.device = 'cpu' # device which we run the simulation use 'cuda' if gpu available otherwise 'cpu'
+        self.device = 'cuda' # device which we run the simulation use 'cuda' if gpu available otherwise 'cpu'
         self.total_number_of_clients = 59 # total number of subjects (client + server)
-        self.learning_rate = 1e-3  # learning rate for optimizer
-        self.steps = 5000  # total number of epochs
-        self.inner_step_for_AE = 100  # number of steps to fine tunne the Autoencoder
+        self.learning_rate = 1e-2  # learning rate for optimizer
+        self.steps = 1000  # total number of epochs
+        self.inner_step_for_AE = 50  # number of steps to fine tunne the Autoencoder
         # number of steps in the server side to finetune
-        self.inner_step_server_finetune = 100
+        self.inner_step_server_finetune = 50
         # number of steps that server fine tune its hn and user embedding parameters
-        self.inner_step_for_server = 100
-        self.inner_step_for_client = 100  # number of steps that user fine tune its model
-        self.inner_lr = 1e-3  # user learning rate
+        self.inner_step_for_server = 50
+        self.inner_step_for_client = 50  # number of steps that user fine tune its model
+        self.inner_lr = 1e-2  # user learning rate
         self.inner_wd = 5e-5  # weight decay
         self.inout_channels = 1 # number of channels
         self.hidden = 16  # Autoencoder layer 2 parameters
@@ -80,10 +80,9 @@ def SemiPFL(params):
     model.to(device)
 
     # optimizer and loss functions
-    optimizer = torch.optim.Adam(
-        params=hnet.parameters(), lr=params.learning_rate)
-    criteria_AE = torch.nn.MSELoss()  # I was using this before: BCEWithLogitsLoss()
-    criteria_model = torch.nn.NLLLoss()  # I was using this before: CrossEntropyLoss
+    optimizer = torch.optim.Adam(params=hnet.parameters(), lr=params.learning_rate)
+    criteria_AE = torch.nn.BCEWithLogitsLoss()  # I was using this before:  MSELoss()
+    criteria_model = torch.nn.NLLLoss()  # I was using this before: CrossEntropyLoss()
 
     # SemiPFL begins
     step_iter = trange(params.steps)
@@ -115,10 +114,8 @@ def SemiPFL(params):
             sensor_values, _ = tuple(t.to(device) for t in batch)
             predicted_sensor_values = AE(sensor_values.float())
             prvs_loss_for_AE = criteria_AE(
-                predicted_sensor_values, sensor_values.float())
+                sensor_values.float(), predicted_sensor_values)
             AE.train()
-            #print(
-            #    f"AE Step: {step+1}, Node ID: {client_id}, Loss: {prvs_loss:.4f}")
 
         # inner updates -> obtaining theta_tilda
         dataloader = torch.utils.data.DataLoader(
@@ -130,12 +127,25 @@ def SemiPFL(params):
             batch = next(iter(dataloader))
             sensor_values, _ = tuple(t.to(device) for t in batch)
             predicted_sensor_values = AE(sensor_values.float())
-            loss = criteria_AE(predicted_sensor_values, sensor_values.float())
+            loss = criteria_AE(sensor_values.float(), predicted_sensor_values)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(AE.parameters(), 50)
             inner_optim.step()
         optimizer.zero_grad()
         final_state = AE.state_dict()
+
+        # NOTE: evaluation on sent model
+        with torch.no_grad():
+            AE.eval()
+            dataloader = torch.utils.data.DataLoader(
+                nodes.client_loaders[client_id], batch_size=params.batch_size, shuffle=True)
+            batch = next(iter(
+                dataloader))
+            sensor_values, _ = tuple(t.to(device) for t in batch)
+            predicted_sensor_values = AE(sensor_values.float())
+            prvs_loss_for_AE_updated = criteria_AE(
+                sensor_values.float(), predicted_sensor_values)
+            AE.train()
 
         # calculating delta theta
         delta_theta = OrderedDict(
@@ -180,7 +190,6 @@ def SemiPFL(params):
             prvs_loss_server_model = criteria_model(
                 predicted_activity, activity)
             user_model.train()
-            #print(f"SPFL generated model Step: {step+1}, Node ID: {client_id}, Loss: {prvs_loss:.4f}")
 
         # fine-tune the model on user labeled dataset
         for param in user_model.parameters():
@@ -215,7 +224,7 @@ def SemiPFL(params):
             prvs_loss_fine_tuned = criteria_model(predicted_activity, activity)
             user_model.train()
             step_iter.set_description(
-                    f"Step: {step+1}, Node ID: {client_id}, AE loss: {prvs_loss_for_AE:.4f}, Server model loss: {prvs_loss_server_model:.4f}, User fine tuned loss: {prvs_loss_fine_tuned:.4f}\n")
+                    f"Step: {step+1}, Node ID: {client_id}, AE loss: {prvs_loss_for_AE:.4f}, AE fine tuned loss: {prvs_loss_for_AE_updated:.4f}, Server model loss: {prvs_loss_server_model:.4f}, User fine tuned loss: {prvs_loss_fine_tuned:.4f}\n")
 
         # save results
         results['Step'].append(step+1)
@@ -223,6 +232,7 @@ def SemiPFL(params):
         results['AE loss'].append(prvs_loss_for_AE.item())
         results['Server model loss'].append(prvs_loss_server_model.item())
         results['Client fine tuned loss'].append(prvs_loss_fine_tuned.item())
+        results['AE fine tuned loss'].append(prvs_loss_for_AE_updated.item())
 
     return results
 

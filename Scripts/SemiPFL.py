@@ -74,7 +74,7 @@ class parameters:
         self.number_of_client = 58  # total number of clients
         self.server_ID = 0  # server ID
         self.batch_size = 128  # training batch size
-        self.window_size = 30  # window size
+        self.window_size = 30  # window size (for our case 30)
         self.width = 9  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
         self.n_kernels = 16  # number of kernels for hypernetwork
         self.device = 'cuda' # device which we run the simulation use 'cuda' if gpu available otherwise 'cpu'

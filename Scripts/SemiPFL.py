@@ -6,14 +6,65 @@ from tqdm import trange
 import torch
 import pandas as pd
 import random
-import torch.nn as nn
+import numpy as np
 import torch.utils.data
 from torchvision import transforms
-torch.manual_seed(0)
+
+
+
+def set_seed(seed):
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.enabled = False
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
+
+def f1_loss(y_true: torch.Tensor, y_pred: torch.Tensor, is_training=False) -> torch.Tensor:
+    '''Calculate F1 score. Can work with gpu tensors
+
+    The original implmentation is written by Michal Haltuf on Kaggle.
+
+    Returns
+    -------
+    torch.Tensor
+        `ndim` == 1. 0 <= val <= 1
+
+    Reference
+    ---------
+    - https://www.kaggle.com/rejpalcz/best-loss-function-for-f1-score-metric
+    - https://scikit-learn.org/stable/modules/generated/sklearn.metrics.f1_score.html#sklearn.metrics.f1_score
+    - https://discuss.pytorch.org/t/calculating-precision-recall-and-f1-score-in-case-of-multi-label-classification/28265/6
+
+    '''
+    assert y_true.ndim == 1
+    assert y_pred.ndim == 1 or y_pred.ndim == 2
+
+    if y_pred.ndim == 2:
+        y_pred = y_pred.argmax(dim=1)
+
+    tp = (y_true * y_pred).sum().to(torch.float32)
+    tn = ((1 - y_true) * (1 - y_pred)).sum().to(torch.float32)
+    fp = ((1 - y_true) * y_pred).sum().to(torch.float32)
+    fn = (y_true * (1 - y_pred)).sum().to(torch.float32)
+
+    epsilon = 1e-7
+
+    precision = tp / (tp + fp + epsilon)
+    recall = tp / (tp + fn + epsilon)
+
+    f1 = 2 * (precision * recall) / (precision + recall + epsilon)
+    f1.requires_grad = is_training
+    return f1
 
 
 class parameters:
     def __init__(self):
+        self.seed = 0
         self.labels_list = ['JOG', 'JUM',  'STD', 'WAL']  # list of activities
         self.outputdim = 20 # should be len(self.labels_list)
         self.data_address = os.path.abspath(os.path.join(
@@ -26,7 +77,7 @@ class parameters:
         self.window_size = 30  # window size
         self.width = 9  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
         self.n_kernels = 16  # number of kernels for hypernetwork
-        self.device = 'cpu' # device which we run the simulation use 'cuda' if gpu available otherwise 'cpu'
+        self.device = 'cuda' # device which we run the simulation use 'cuda' if gpu available otherwise 'cpu'
         self.total_number_of_clients = 59 # total number of subjects (client + server)
         self.learning_rate = 1e-2  # learning rate for optimizer
         self.steps = 1000  # total number of epochs
@@ -115,12 +166,10 @@ def SemiPFL(params):
         AE.load_state_dict(weights)
 
         # init inner optimizer
-        inner_optim = torch.optim.Adam(
-            AE.parameters(), lr=params.inner_lr, weight_decay=params.inner_wd)
+        inner_optim = torch.optim.Adam(AE.parameters(), lr=params.inner_lr, weight_decay=params.inner_wd)
 
         # storing theta_i for later calculating delta theta
-        inner_state = OrderedDict(
-            {k: tensor.data for k, tensor in weights.items()})
+        inner_state = OrderedDict({k: tensor.data for k, tensor in weights.items()})
 
         # NOTE: evaluation on sent model
         with torch.no_grad():
@@ -200,6 +249,7 @@ def SemiPFL(params):
             encoded_sensor_values = AE.encoder(sensor_values.float())
             predicted_activity = client_model[client_id](encoded_sensor_values)
             prvs_loss_server_model = criteria_model(predicted_activity, activity)
+            f1_score_server = f1_loss(activity, predicted_activity)
             client_model[client_id].train()
 
         # fine-tune the model on user labeled dataset (I commented that since looks like its not improving)
@@ -231,8 +281,9 @@ def SemiPFL(params):
             encoded_sensor_values = AE.encoder(sensor_values.float())
             predicted_activity = client_model[client_id](encoded_sensor_values)
             prvs_loss_fine_tuned = criteria_model(predicted_activity, activity)
+            f1_score_user = f1_loss(activity, predicted_activity)
             client_model[client_id].train()
-            step_iter.set_description(f"Step: {step+1}, Node ID: {client_id}, AE loss: {prvs_loss_for_AE:.4f}, AE fine tuned loss: {prvs_loss_for_AE_updated:.4f}, Server model loss: {prvs_loss_server_model:.4f}, User fine tuned loss: {prvs_loss_fine_tuned:.4f}\n")
+            step_iter.set_description(f"Step: {step+1}, Node ID: {client_id}, AE : {prvs_loss_for_AE:.4f}, AE fine: {prvs_loss_for_AE_updated:.4f}, Server loss: {prvs_loss_server_model:.4f}, server f1: {f1_score_server:.4f}, User loss: {prvs_loss_fine_tuned:.4f}, user f1: {f1_score_user:.4f}\n")
 
         # save results
         results['Step'].append(step+1)
@@ -241,11 +292,14 @@ def SemiPFL(params):
         results['Server model loss'].append(prvs_loss_server_model.item())
         results['Client fine tuned loss'].append(prvs_loss_fine_tuned.item())
         results['AE fine tuned loss'].append(prvs_loss_for_AE_updated.item())
+        results['Server f1'].append(f1_score_server.item())
+        results['User f1'].append(f1_score_user.item())
 
     return results
 
 
 if __name__ == '__main__':
     params = parameters()
+    set_seed(params.seed)
     result = SemiPFL(params=params)
     pd.DataFrame.from_dict(result, orient="columns").to_csv("results.csv")

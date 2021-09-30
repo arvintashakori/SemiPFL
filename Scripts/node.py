@@ -1,8 +1,5 @@
 import torch
-from torchvision.transforms import transforms
-
 from dataset import assign_loaders
-
 torch.manual_seed(0)
 
 

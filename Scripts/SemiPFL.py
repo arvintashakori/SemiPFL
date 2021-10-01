@@ -2,6 +2,7 @@ import os
 from models import HN, Autoencoder, BASEModel
 from collections import OrderedDict, defaultdict
 from node import Clients
+from torch import nn
 from tqdm import trange
 import torch
 import pandas as pd
@@ -9,7 +10,7 @@ import random
 import numpy as np
 import torch.utils.data
 from torchvision import transforms
-
+from sklearn.metrics import f1_score
 
 
 def set_seed(seed):
@@ -41,25 +42,28 @@ def f1_loss(y_true: torch.Tensor, y_pred: torch.Tensor, is_training=False) -> to
     - https://discuss.pytorch.org/t/calculating-precision-recall-and-f1-score-in-case-of-multi-label-classification/28265/6
 
     '''
-    assert y_true.ndim == 1
-    assert y_pred.ndim == 1 or y_pred.ndim == 2
-
-    if y_pred.ndim == 2:
-        y_pred = y_pred.argmax(dim=1)
-
-    tp = (y_true * y_pred).sum().to(torch.float32)
-    tn = ((1 - y_true) * (1 - y_pred)).sum().to(torch.float32)
-    fp = ((1 - y_true) * y_pred).sum().to(torch.float32)
-    fn = (y_true * (1 - y_pred)).sum().to(torch.float32)
-
-    epsilon = 1e-7
-
-    precision = tp / (tp + fp + epsilon)
-    recall = tp / (tp + fn + epsilon)
-
-    f1 = 2 * (precision * recall) / (precision + recall + epsilon)
-    f1.requires_grad = is_training
+    _, pred = torch.max(y_pred, dim=1)
+    f1 = f1_score(y_true.cpu(), pred.cpu(), average='weighted')
     return f1
+    # assert y_true.ndim == 1
+    # assert y_pred.ndim == 1 or y_pred.ndim == 2
+    #
+    # if y_pred.ndim == 2:
+    #     y_pred = y_pred.argmax(dim=1)
+    #
+    # tp = (y_true * y_pred).sum().to(torch.float32)
+    # tn = ((1 - y_true) * (1 - y_pred)).sum().to(torch.float32)
+    # fp = ((1 - y_true) * y_pred).sum().to(torch.float32)
+    # fn = (y_true * (1 - y_pred)).sum().to(torch.float32)
+    #
+    # epsilon = 1e-7
+    #
+    # precision = tp / (tp + fp + epsilon)
+    # recall = tp / (tp + fn + epsilon)
+    #
+    # f1 = 2 * (precision * recall) / (precision + recall + epsilon)
+    # f1.requires_grad = is_training
+    # return f1
 
 
 class parameters:
@@ -253,10 +257,10 @@ def SemiPFL(params):
             client_model[client_id].train()
 
         # fine-tune the model on user labeled dataset (I commented that since looks like its not improving)
-        #for param in client_model[client_id].parameters():
-            #param.requires_grad = False
+        for param in client_model[client_id].parameters():
+            param.requires_grad = False
 
-        #client_model[client_id].fc2 = nn.Linear(params.model_hidden_layer, params.outputdim).to(device)
+        client_model[client_id].fc2 = nn.Linear(params.model_hidden_layer, params.outputdim).to(device)
 
         dataloader = torch.utils.data.DataLoader(nodes.client_labeled_loaders[client_id], batch_size=params.batch_size, shuffle=True)
         for i in range(params.inner_step_for_client):

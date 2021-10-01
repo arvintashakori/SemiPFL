@@ -70,7 +70,7 @@ class parameters:
     def __init__(self):
         self.seed = 0
         self.labels_list = ['JOG', 'JUM',  'STD', 'WAL']  # list of activities
-        self.outputdim = 20 # should be len(self.labels_list)
+        self.outputdim = 4 # should be len(self.labels_list)
         self.data_address = os.path.abspath(os.path.join(
             os.getcwd(), os.pardir)) + "/Datasets/"  # data adress
         self.trial_number = 0  # which trial we use for this test
@@ -83,22 +83,22 @@ class parameters:
         self.n_kernels = 16  # number of kernels for hypernetwork
         self.device = 'cuda' # device which we run the simulation use 'cuda' if gpu available otherwise 'cpu'
         self.total_number_of_clients = 59 # total number of subjects (client + server)
-        self.learning_rate = 1e-2  # learning rate for optimizer
+        self.learning_rate = 1e-3  # learning rate for optimizer
         self.steps = 1000  # total number of epochs
-        self.inner_step_for_AE = 50  # number of steps to fine tunne the Autoencoder
+        self.inner_step_for_AE = 1000  # number of steps to fine tunne the Autoencoder
         # number of steps in the server side to finetune
         self.inner_step_server_finetune = 50
         # number of steps that server fine tune its hn and user embedding parameters
-        self.inner_step_for_server = 50
-        self.inner_step_for_client = 50  # number of steps that user fine tune its model
-        self.inner_lr = 1e-2  # user learning rate
+        self.inner_step_for_server = 1000
+        self.inner_step_for_client = 1000  # number of steps that user fine tune its model
+        self.inner_lr = 1e-3  # user learning rate
         self.inner_wd = 5e-5  # weight decay
         self.inout_channels = 1  # number of channels
         self.hidden = 16  # Autoencoder layer 2 parameters
         self.n_kernels_enc = 3  # autoencoder encoder kernel size
         self.hidden_dim_for_HN = 100  # hidden dimension for hypernetwork
         self.n_kernels_dec = 3  # autoencoder decoder kernel size
-        self.latent_rep = 4  # latent reperesentation size
+        self.latent_rep = 16  # latent reperesentation size
         self.n_hidden_HN = 1  # number of hidden layers in hypernetworks
         self.stride_value = 1  # stride value for autoencoder
         self.padding_value = 1  # padding value for autoencoder
@@ -122,7 +122,17 @@ def SemiPFL(params):
                     transform=transform,
                     num_user=params.total_number_of_clients)
 
+    # dataloaders
+    client_loader = []
+    client_labeled_loaders = []
+    server_loaders = torch.utils.data.DataLoader(nodes.server_loaders, batch_size=params.batch_size, shuffle=True)
+
+    for i in range(params.number_of_client):
+        client_loader.append(torch.utils.data.DataLoader(nodes.client_loaders[i], batch_size=params.batch_size, shuffle=True))
+        client_labeled_loaders.append(torch.utils.data.DataLoader(nodes.client_labeled_loaders[i], batch_size=params.batch_size, shuffle=True))
+
     # model initialization
+
     hnet = HN(n_nodes=params.number_of_client, embedding_dim=int(1 + params.number_of_client / 4),
               in_channels=params.inout_channels, out_dim=params.outputdim, n_kernels=params.n_kernels, hidden_dim=params.hidden_dim_for_HN,
               spec_norm=params.spec_norm, n_hidden=params.n_hidden_HN, n_kernels_enc=params.n_kernels_enc, n_kernels_dec=params.n_kernels_dec, latent_rep=params.latent_rep, stride_value=params.stride_value, padding_value=params.padding_value)  # initializing the hypernetwork
@@ -178,24 +188,18 @@ def SemiPFL(params):
         # NOTE: evaluation on sent model
         with torch.no_grad():
             AE.eval()
-            dataloader = torch.utils.data.DataLoader(
-                nodes.client_loaders[client_id], batch_size=params.batch_size, shuffle=True)
-            batch = next(iter(
-                dataloader))
+            batch = next(iter(client_loader[client_id]))
             sensor_values, _ = tuple(t.to(device) for t in batch)
             predicted_sensor_values = AE(sensor_values.float())
-            prvs_loss_for_AE = criteria_AE(
-                sensor_values.float(), predicted_sensor_values)
+            prvs_loss_for_AE = criteria_AE(sensor_values.float(), predicted_sensor_values)
             AE.train()
 
         # inner updates -> obtaining theta_tilda
-        dataloader = torch.utils.data.DataLoader(
-            nodes.client_loaders[client_id], batch_size=params.batch_size, shuffle=True)
         for i in range(params.inner_step_server_finetune):
             AE.train()
             inner_optim.zero_grad()
             optimizer.zero_grad()
-            batch = next(iter(dataloader))
+            batch = next(iter(client_loader[client_id]))
             sensor_values, _ = tuple(t.to(device) for t in batch)
             predicted_sensor_values = AE(sensor_values.float())
             loss = criteria_AE(sensor_values.float(), predicted_sensor_values)
@@ -208,12 +212,10 @@ def SemiPFL(params):
         # NOTE: evaluation on sent model
         with torch.no_grad():
             AE.eval()
-            dataloader = torch.utils.data.DataLoader(nodes.client_loaders[client_id], batch_size=params.batch_size, shuffle=True)
-            batch = next(iter(dataloader))
+            batch = next(iter(client_loader[client_id]))
             sensor_values, _ = tuple(t.to(device) for t in batch)
             predicted_sensor_values = AE(sensor_values.float())
-            prvs_loss_for_AE_updated = criteria_AE(
-                sensor_values.float(), predicted_sensor_values)
+            prvs_loss_for_AE_updated = criteria_AE(sensor_values.float(), predicted_sensor_values)
             AE.train()
 
         # calculating delta theta
@@ -230,12 +232,11 @@ def SemiPFL(params):
 
         # transform the server dataset using the user autoencoder
         # train a model on  transformed dataset in server side
-        dataloader = torch.utils.data.DataLoader(nodes.server_loaders, batch_size=params.batch_size, shuffle=True)
         for i in range(params.inner_step_for_server):
             client_model[client_id].train()
             inner_optim.zero_grad()
             optimizer.zero_grad()
-            batch = next(iter(dataloader))
+            batch = next(iter(server_loaders))
             sensor_values, activity = tuple(t.to(device) for t in batch)
             encoded_sensor_values = AE.encoder(sensor_values.float())
             predicted_activity = client_model[client_id](encoded_sensor_values)
@@ -246,9 +247,8 @@ def SemiPFL(params):
         optimizer.zero_grad()
 
         with torch.no_grad():
-            dataloader = torch.utils.data.DataLoader(nodes.client_loaders[client_id], batch_size=params.batch_size, shuffle=True)
             client_model[client_id].eval()
-            batch = next(iter(dataloader))
+            batch = next(iter(client_loader[client_id]))
             sensor_values, activity = tuple(t.to(device) for t in batch)
             encoded_sensor_values = AE.encoder(sensor_values.float())
             predicted_activity = client_model[client_id](encoded_sensor_values)
@@ -262,11 +262,10 @@ def SemiPFL(params):
 
         client_model[client_id].fc2 = nn.Linear(params.model_hidden_layer, params.outputdim).to(device)
 
-        dataloader = torch.utils.data.DataLoader(nodes.client_labeled_loaders[client_id], batch_size=params.batch_size, shuffle=True)
         for i in range(params.inner_step_for_client):
             inner_optim.zero_grad()
             optimizer.zero_grad()
-            batch = next(iter(dataloader))
+            batch = next(iter(client_labeled_loaders[client_id]))
             sensor_values, activity = tuple(t.to(device) for t in batch)
             encoded_sensor_values = AE.encoder(sensor_values.float())
             predicted_activity = client_model[client_id](encoded_sensor_values)
@@ -278,9 +277,8 @@ def SemiPFL(params):
 
         # Evaluate the model on user dataset
         with torch.no_grad():
-            dataloader = torch.utils.data.DataLoader(nodes.client_labeled_loaders[client_id], batch_size=params.batch_size, shuffle=True)
             client_model[client_id].eval()
-            batch = next(iter(dataloader))
+            batch = next(iter(client_loader[client_id]))
             sensor_values, activity = tuple(t.to(device) for t in batch)
             encoded_sensor_values = AE.encoder(sensor_values.float())
             predicted_activity = client_model[client_id](encoded_sensor_values)

@@ -3,8 +3,10 @@ import random
 import itertools
 import torch
 import numpy as np
+
 torch.manual_seed(0)
 np.random.seed(0)
+
 
 class DatasetFromNPY(Dataset):
     def __init__(self, data, height, width, transforms):
@@ -18,11 +20,15 @@ class DatasetFromNPY(Dataset):
         for item in num_labels[0]:
             count_label.append(list(data[:, height * width]).count(item))
         min_num = sorted(count_label)
+        count_label = np.append(num_labels[1], (len(data)))
         self.data = np.zeros((len(min_num) * min_num[0], height * width + 1))
-        for k in range(len(num_labels[0]) - 1):
+        for k in range(len(num_labels[0])):
             self.data[k * min_num[0]:(k + 1) * min_num[0], :] = np.array(
-                random.sample(list(data[num_labels[1][k]:num_labels[1][k + 1], :]), min_num[0]))
+                random.sample(list(data[count_label[k]:count_label[k + 1], :]), min_num[0]))
+            # print('self.data', k * min_num[0], (k + 1) * min_num[0])
+            # print('data', count_label[k], count_label[k + 1])
         self.labels = self.data[:, height * width]
+        self.labels = np.array(list(map(lambda x: list(num_labels[0]).index(x), self.data[:, height * width])))
         self.data = np.delete(self.data, -1, axis=1)
 
     def __getitem__(self, index):
@@ -61,7 +67,7 @@ def assign_loaders(address, trial_number, label_ratio, server_ID, windowsize, wi
     client_lablled_dataset = []
     for user in range(num_user):
         file_name = address + 'user' + \
-            str(user) + 'trail_' + str(trial_number) + '.npy'
+                    str(user) + 'trail_' + str(trial_number) + '.npy'
         client_data = np.load(file_name, mmap_mode='r')
         client_dataset.append(
             DatasetFromNPY(client_data, width, windowsize, transform))  # load 59 users' data into client_dataset

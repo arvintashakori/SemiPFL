@@ -1,34 +1,17 @@
-import os
 from models import HN, Autoencoder, BASEModel
 from collections import OrderedDict, defaultdict
+from utils import get_default_device, set_seed, f1_loss
 from node import Clients
-from torch import nn
+
+import os
 from tqdm import trange
-import torch
 import pandas as pd
 import random
-import numpy as np
+
+import torch
+from torch import nn
 import torch.utils.data
 from torchvision import transforms
-from sklearn.metrics import f1_score
-
-
-def set_seed(seed):
-    np.random.seed(seed)
-    random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.enabled = False
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
-
-
-def f1_loss(y_true: torch.Tensor, y_pred: torch.Tensor, is_training=False) -> torch.Tensor:
-    _, pred = torch.max(y_pred, dim=1)
-    f1 = f1_score(y_true.cpu(), pred.cpu(), average='weighted')
-    return f1
 
 
 class parameters:
@@ -46,8 +29,6 @@ class parameters:
         self.window_size = 30  # window size (for our case 30)
         self.width = 9  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
         self.n_kernels = 16  # number of kernels for hypernetwork
-        # device which we run the simulation use 'cuda' if gpu available otherwise 'cpu'
-        self.device = 'cuda'
         # total number of subjects (client + server)
         self.total_number_of_clients = 59
         self.learning_rate = 1e-3  # learning rate for optimizer
@@ -77,7 +58,7 @@ def SemiPFL(params):
     # initialization
     transform = transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
-    device = torch.device(params.device)
+    device = get_default_device()
 
     # laoding data
     nodes = Clients(address=params.data_address,
@@ -178,7 +159,7 @@ def SemiPFL(params):
         # NOTE: evaluation on sent model
         with torch.no_grad():
             AE.eval()
-            batch = next(iter(client_loader[client_id]))
+            batch = next(iter(server_loaders[client_id]))
             sensor_values, _ = tuple(t.to(device) for t in batch)
             predicted_sensor_values = AE(sensor_values.float())
             prvs_loss_for_AE_updated = criteria_AE(

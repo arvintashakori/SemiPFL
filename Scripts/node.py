@@ -10,6 +10,7 @@ class Clients:
             trial_number,
             label_ratio,
             server_ID,
+            eval_ratio,
             #batch_size,
             window_size,
             width,
@@ -18,6 +19,7 @@ class Clients:
     ):
         self.trial_number = trial_number
         self.label_ratio = label_ratio
+        self.eval_ratio = eval_ratio
         #self.number_client = number_client
         self.server_ID = server_ID
         #self.batch_size = batch_size
@@ -31,13 +33,14 @@ class Clients:
         self._init_dataloaders()
 
     def _init_dataloaders(self):
-        self.client_labeled_loaders, self.client_loaders, self.server_loaders, self.labels_list = assign_loaders(
+        self.client_labeled_loaders, self.client_loaders, self.server_loaders, self.eval_data = assign_loaders(
             self.address,
             self.trial_number,
             self.label_ratio,
-            #self.number_client,
+            self.eval_ratio,
+            # self.number_client,
             self.server_ID,
-            #self.batch_size,
+            # self.batch_size,
             self.window_size,
             self.width,
             self.transform,

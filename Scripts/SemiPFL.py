@@ -22,9 +22,10 @@ class parameters:
         self.data_address = os.path.abspath(os.path.join(
             os.getcwd(), os.pardir)) + "/Datasets/MobiNpy_4_Act/"  # data adress
         self.trial_number = 0  # which trial we use for this test
-        self.label_ratio = 0.10  # ratio fo labeled data
-        self.number_of_client = 58  # total number of clients
-        self.server_ID = 0  # server ID
+        self.label_ratio = 0.10  # ratio of labeled data
+        self.eval_ratio = 0.10 # ratio of eval data
+        self.number_of_client = 1  # total number of clients
+        self.server_ID = [0, 1, 2, 3, 4]  # server ID
         self.batch_size = 128  # training batch size
         self.window_size = 30  # window size (for our case 30)
         self.width = 9  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
@@ -35,9 +36,10 @@ class parameters:
         self.steps = 1000  # total number of epochs
         self.inner_step_for_AE = 100  # number of steps to fine tunne the Autoencoder
         # number of steps in the server side to finetune
-        self.inner_step_server_finetune = 50
+        self.inner_step_server_finetune = 100
         # number of steps that server fine tune its hn and user embedding parameters
         self.inner_step_for_server = 100
+        self.model_loop = False
         self.inner_step_for_client = 100  # number of steps that user fine tune its model
         self.inner_lr = 1e-3  # user learning rate
         self.inner_wd = 5e-5  # weight decay
@@ -65,6 +67,7 @@ def SemiPFL(params):
                     trial_number=params.trial_number,
                     label_ratio=params.label_ratio,
                     server_ID=params.server_ID,
+                    eval_ratio = params.eval_ratio,
                     window_size=params.window_size,
                     width=params.width,
                     transform=transform,
@@ -73,6 +76,7 @@ def SemiPFL(params):
     # dataloaders
     client_loader = []
     client_labeled_loaders = []
+    eval_loader = []
     server_loaders = torch.utils.data.DataLoader(
         nodes.server_loaders, batch_size=params.batch_size, shuffle=True)
 
@@ -159,7 +163,7 @@ def SemiPFL(params):
         # NOTE: evaluation on sent model
         with torch.no_grad():
             AE.eval()
-            batch = next(iter(server_loaders[client_id]))
+            batch = next(iter(client_loader[client_id]))
             sensor_values, _ = tuple(t.to(device) for t in batch)
             predicted_sensor_values = AE(sensor_values.float())
             prvs_loss_for_AE_updated = criteria_AE(
@@ -182,6 +186,9 @@ def SemiPFL(params):
 
         # transform the server dataset using the user autoencoder
         # train a model on  transformed dataset in server side
+        if not params.model_loop:
+            client_model[client_id] = model
+
         for i in range(params.inner_step_for_server):
             client_model[client_id].train()
             inner_optim.zero_grad()
@@ -240,7 +247,7 @@ def SemiPFL(params):
             f1_score_user = f1_loss(activity, predicted_activity)
             client_model[client_id].train()
             step_iter.set_description(
-                f"Step: {step+1}, Node ID: {client_id}, AE : {prvs_loss_for_AE:.4f}, AE fine: {prvs_loss_for_AE_updated:.4f}, Server loss: {prvs_loss_server_model:.4f}, server f1: {f1_score_server:.4f}, User loss: {prvs_loss_fine_tuned:.4f}, user f1: {f1_score_user:.4f}\n")
+                f"S:{step+1},ID:{client_id},AE:{prvs_loss_for_AE:.4f},AE_f:{prvs_loss_for_AE_updated:.4f},Server_l:{prvs_loss_server_model:.4f},server_f1: {f1_score_server:.4f},User_l:{prvs_loss_fine_tuned:.4f},user_f1: {f1_score_user:.4f}\n")
 
         # save results
         results['Step'].append(step+1)

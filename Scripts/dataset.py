@@ -10,7 +10,7 @@ np.random.seed(0)
 
 class DatasetFromNPY(Dataset):
     def __init__(self, data, height, width, transforms):
-        # height is the window size: from 100 - 1000
+        # height is the window size: 30
         self.height = height
         self.width = width
         self.transforms = transforms
@@ -33,50 +33,55 @@ class DatasetFromNPY(Dataset):
 
     def __getitem__(self, index):
         single_adl_label = int(self.labels[index])
-        # single_adl_label = char_label.index(single_adl_label)
-        # 读取所有像素值，并将 1D array ([784]) reshape 成为 2D array ([28,28])
-        # x=self.data.iloc[index][0:9]
         adl_as_np = np.asarray(self.data[index, :]).reshape(
             self.height, self.width).astype(float)
-        # 把 numpy array 格式的图像转换成灰度 PIL image
-        # img_as_img = Image.fromarray(ADL_as_np)
-        # img_as_img = ADL_as_np.convert('L')
-        # 将图像转换成 tensor should be in tensor form,
         if self.transforms is not None:
             adl_as_tensor = self.transforms(adl_as_np)
         else:
             adl_as_tensor = adl_as_np
-            # 返回图像及其 label
-
         return adl_as_tensor, single_adl_label
 
     def __len__(self):
         return self.data.shape[0]
 
 
-def assign_loaders(address, trial_number, label_ratio, server_ID, windowsize, width,
+def assign_loaders(address, trial_number, label_ratio, eval_ratio, server_ID, windowsize, width,
                    transform, num_user):
-    server_data = np.load(address + 'user' + str(server_ID) + 'trail_'
-                          + str(trial_number) + '.npy', mmap_mode='r')
-    server_loaders = DatasetFromNPY(server_data,
-                                    width, windowsize, transform)  # load test dataset
-    labels_list = np.unique(server_data[:, windowsize * width])
-    # num_user_list = np.delete(range(num_user), server_ID)
+    server_data = []
+    num_user_list = range(num_user)
+    for server in server_ID:
+        server_data.append(np.load(address + 'user' + str(server) + 'trail_'
+                                   + str(trial_number) + '.npy', mmap_mode='r'))
+
+    server_loaders = DatasetFromNPY(np.array(list(itertools.chain.from_iterable(server_data))),
+                                        width, windowsize, transform)  # load test dataset
+    num_user_list = np.delete(num_user_list, server_ID)
+    # labels_list = np.unique(server_data[:, windowsize * width])
+
+    # num_user_list = list(map(lambda x: np.delete(num_user_list, x), server_ID))
     # num_user_list = random.sample(num_user_list, number_client)
     client_dataset = []
     client_lablled_dataset = []
-    for user in range(num_user):
+    eval_dataset = []
+    for user in num_user_list:  # return a list of user data and shuffle each user's data before return
         file_name = address + 'user' + \
                     str(user) + 'trail_' + str(trial_number) + '.npy'
         client_data = np.load(file_name, mmap_mode='r')
+        client_data = np.array(client_data)
+        np.random.shuffle(client_data)
+        eval_data = client_data[0:int(client_data.shape[0] * eval_ratio)]
+        client_data = client_data[int(client_data.shape[0] * eval_ratio):-1]
         client_dataset.append(
             DatasetFromNPY(client_data, width, windowsize, transform))  # load 59 users' data into client_dataset
         # client_data = np.array(list(itertools.chain.from_iterable(client_data)))
-        # client_unlablled = client_data[0:int(client_data.shape[0] * label_ratio)]
-        client_lablled = client_data[-int(client_data.shape[0]
-                                          * (1 - label_ratio)):-1]
+        client_lablled = client_data[0:int(client_data.shape[0] * label_ratio)]
+        # lablled_user_list = random.sample(num_user_list, int(client_data.shape[0] * (label_ratio))) #
+        # client_lablled = random.sample(client_data,
+        #                                int(client_data.shape[0] * (label_ratio)))  # return randomly labelled data
         client_lablled_dataset.append(DatasetFromNPY(
             client_lablled, width, windowsize, transform))
+        eval_dataset.append(DatasetFromNPY(
+            eval_data, width, windowsize, transform))
     # server_loaders = torch.utils.data.DataLoader(
     #     server_loaders, batch_size=batch_size, shuffle=True)
-    return client_dataset, client_lablled_dataset, server_loaders, labels_list
+    return client_dataset, client_lablled_dataset, server_loaders, eval_dataset

@@ -18,12 +18,13 @@ class parameters:
     def __init__(self):
         self.seed = 0
         self.labels_list = ['JOG', 'JUM',  'STD', 'WAL']  # list of activities
-        self.outputdim = 4  # should be len(self.labels_list)
+        # should be len(self.labels_list)
+        self.outputdim = len(self.labels_list)
         self.data_address = os.path.abspath(os.path.join(
             os.getcwd(), os.pardir)) + "/Datasets/MobiNpy_4_Act/"  # data adress
         self.trial_number = 0  # which trial we use for this test
         self.label_ratio = 0.10  # ratio of labeled data
-        self.eval_ratio = 0.10 # ratio of eval data
+        self.eval_ratio = 0.10  # ratio of eval data
         self.number_of_client = 1  # total number of clients
         self.server_ID = [0, 1, 2, 3, 4]  # server ID
         self.batch_size = 128  # training batch size
@@ -67,7 +68,7 @@ def SemiPFL(params):
                     trial_number=params.trial_number,
                     label_ratio=params.label_ratio,
                     server_ID=params.server_ID,
-                    eval_ratio = params.eval_ratio,
+                    eval_ratio=params.eval_ratio,
                     window_size=params.window_size,
                     width=params.width,
                     transform=transform,

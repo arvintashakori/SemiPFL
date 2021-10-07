@@ -78,8 +78,8 @@ class Autoencoder(nn.Module):
         self.conv2 = nn.Conv2d(
             hidden, latent_rep, n_kernels_enc, padding=padding_value)
         # batch norms
-        self.batchNorm1 = nn.BatchNorm2d(16)
-        self.batchNorm2 = nn.BatchNorm2d(4)
+        #self.batchNorm1 = nn.BatchNorm2d(16)
+        #self.batchNorm2 = nn.BatchNorm2d(4)
         # Decoder
         self.t_conv1 = nn.ConvTranspose2d(
             latent_rep, hidden, kernel_size=(n_kernels_dec, n_kernels_dec), stride=stride_value, padding=padding_value)
@@ -87,8 +87,8 @@ class Autoencoder(nn.Module):
             hidden, inout_channels, kernel_size=(n_kernels_dec, n_kernels_dec), stride=stride_value, padding=padding_value)
 
     def encoder(self, x):
-        z = F.relu(self.batchNorm1(self.conv1(x)))
-        z = F.relu(self.batchNorm2(self.conv2(z)))
+        z = F.relu(self.conv1(x))
+        z = F.relu(self.conv2(z))
         return z
 
     def decoder(self, x):

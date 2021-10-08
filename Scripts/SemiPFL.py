@@ -25,7 +25,7 @@ class parameters:
         self.trial_number = 0  # which trial we use for this test
         self.label_ratio = 0.10  # ratio of labeled data
         self.eval_ratio = 0.30  # ratio of eval data
-        self.number_of_client = 58  # total number of clients
+        self.number_of_client = 1  # total number of clients
         self.server_ID = [0]  # server ID
         self.batch_size = 128  # training batch size
         self.window_size = 30  # window size (for our case 30)

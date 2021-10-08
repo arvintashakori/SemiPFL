@@ -115,15 +115,21 @@ class Autoencoder(nn.Module):
         print('')
 
     def encoder(self, x):
+        #print("input: " + str(x.shape))
         z = F.relu(self.conv1(x))
+        #print("conv1: " + str(z.shape))
         z = self.pool(F.relu(self.conv2(z)))
+        #print("conv2: " + str(z.shape))
         # z = F.relu(self.conv3(z))
         return z
 
     def decoder(self, x):
         z = F.relu(self.t_conv1(x))
+        #print ("t_conv1: " + str(z.shape))
         z = F.relu(self.t_conv2(z))
-        z = F.relu(self.t_conv3(z))
+        #print("t_conv2: " + str(z.shape))
+        z = t.sigmoid(self.t_conv3(z))
+        #print("t_conv3: " + str(z.shape))
         # z = t.sigmoid(self.t_conv3(z))
         return z
 
@@ -132,14 +138,9 @@ class Autoencoder(nn.Module):
         output = self.decoder(latent_representation)
         return output
 
-    def forward(self, input):
-        latent_representation = self.encoder(input)
-        output = self.decoder(latent_representation)
-        return output
-
 
 class BASEModel(nn.Module):
-    def __init__(self, latent_rep=4 * 3 * 6, out_dim=4, hidden_layer=128):  # 9 * 30 * 4
+    def __init__(self, latent_rep=4 * 3 * 6, out_dim=4, hidden_layer=16):  # 9 * 30 * 4
         super(BASEModel, self).__init__()
         self.fc1 = nn.Linear(latent_rep, hidden_layer)
         self.fc2 = nn.Linear(hidden_layer, out_dim)

@@ -19,6 +19,7 @@ class parameters:
         self.seed = 0
         self.labels_list = ['JOG', 'JUM', 'STD', 'WAL']  # list of activities
         self.outputdim = len(self.labels_list)
+        # self.data_address = r"C:\Users\walke\Documents\GitHub\SemiPFL_Wenwen\MobiNpy_4_Act"  # data adress
         self.data_address = os.path.abspath(os.path.join(
             os.getcwd(), os.pardir)) + "/Datasets/MobiNpy_4_Act/"  # data adress
         self.trial_number = 0  # which trial we use for this test
@@ -49,7 +50,7 @@ class parameters:
         self.n_hidden_HN = 100  # number of hidden layers in hypernetworks
         self.stride_value = 1  # stride value for autoencoder
         self.padding_value = 1  # padding value for autoencoder
-        self.model_hidden_layer = 128  # final model hidden layer size
+        self.model_hidden_layer =128  # final model hidden layer size
         self.spec_norm = False  # True if you want to use spectral norm
 
 
@@ -88,13 +89,14 @@ def SemiPFL(params):
     hnet = HN(n_nodes=params.number_of_client, embedding_dim=int(1 + params.number_of_client / 4),
               in_channels=params.inout_channels, out_dim=params.outputdim, n_kernels=params.n_kernels,
               hidden_dim=params.hidden_dim_for_HN,
-              spec_norm=params.spec_norm, n_hidden=params.n_hidden_HN, n_kernels_enc=params.n_kernels_enc,
+              spec_norm=params.spec_norm, n_hidden=params.hidden, #params.n_hidden_HN,
+              n_kernels_enc=params.n_kernels_enc,
               n_kernels_dec=params.n_kernels_dec, latent_rep=params.latent_rep, stride_value=params.stride_value,
               padding_value=params.padding_value)  # initializing the hypernetwork
     AE = Autoencoder(inout_channels=params.inout_channels, hidden=params.hidden, n_kernels_enc=params.n_kernels_enc,
                      n_kernels_dec=params.n_kernels_dec, latent_rep=params.latent_rep, stride_value=params.stride_value,
                      padding_value=params.padding_value)  # initializing the autoencoder
-    model = BASEModel(latent_rep=params.width * params.window_size * params.latent_rep,
+    model = BASEModel(latent_rep= 4 * 3 * 6, #params.width * params.window_size * params.latent_rep,
                       out_dim=params.outputdim, hidden_layer=params.model_hidden_layer)  # initilizing the base model
 
     # send models to device

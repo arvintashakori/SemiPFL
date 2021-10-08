@@ -19,9 +19,9 @@ class parameters:
         self.seed = 0
         self.labels_list = ['JOG', 'JUM', 'STD', 'WAL']  # list of activities
         self.outputdim = len(self.labels_list)
-        # self.data_address = r"C:\Users\walke\Documents\GitHub\SemiPFL_Wenwen\MobiNpy_4_Act"  # data adress
-        self.data_address = os.path.abspath(os.path.join(
-            os.getcwd(), os.pardir)) + "/Datasets/MobiNpy_4_Act/"  # data adress
+        self.data_address = r"C:\Users\walke\Documents\GitHub\SemiPFL_Wenwen\MobiNpy_4_Act"  # data adress
+        # self.data_address = os.path.abspath(os.path.join(
+        #     os.getcwd(), os.pardir)) + "/Datasets/MobiNpy_4_Act/"  # data adress
         self.trial_number = 0  # which trial we use for this test
         self.label_ratio = 0.10  # ratio of labeled data
         self.eval_ratio = 0.30  # ratio of eval data

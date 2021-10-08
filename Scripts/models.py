@@ -42,12 +42,12 @@ class HN(nn.Module):
         self.t_conv1_weights = nn.Linear(
             hidden_dim, self.n_kernels * self.latent_rep * self.n_kernels_dec * self.n_kernels_dec)
         self.t_conv1_bias = nn.Linear(hidden_dim, self.n_kernels)
+        # self.t_conv2_weights = nn.Linear(
+        #     hidden_dim, self.latent_rep * self.n_kernels * self.n_kernels_dec * self.n_kernels_dec)
+        # self.t_conv2_bias = nn.Linear(hidden_dim, self.latent_rep)
         self.t_conv2_weights = nn.Linear(
-            hidden_dim, self.latent_rep * self.n_kernels * self.n_kernels_dec * self.n_kernels_dec)
-        self.t_conv2_bias = nn.Linear(hidden_dim, self.latent_rep)
-        self.t_conv3_weights = nn.Linear(
-            hidden_dim, self.in_channels * self.latent_rep * self.n_kernels_dec * 5)
-        self.t_conv3_bias = nn.Linear(hidden_dim, self.in_channels)
+            hidden_dim, self.in_channels * self.n_hidden * self.n_kernels_dec * 5)
+        self.t_conv2_bias = nn.Linear(hidden_dim, self.in_channels)
         if spec_norm:
             self.conv1_weights = spectral_norm(self.c1_weights)
             self.conv1_bias = spectral_norm(self.c1_bias)
@@ -73,12 +73,12 @@ class HN(nn.Module):
             "t_conv1.weight": self.t_conv1_weights(features).view(self.latent_rep, self.n_hidden, self.n_kernels_dec,
                                                                   self.n_kernels_dec),
             "t_conv1.bias": self.t_conv1_bias(features).view(-1),
-            "t_conv2.weight": self.t_conv2_weights(features).view(self.n_hidden, self.latent_rep, self.n_kernels_dec,
-                                                                  self.n_kernels_dec),
-            "t_conv2.bias": self.t_conv2_bias(features).view(-1),
-            "t_conv3.weight": self.t_conv3_weights(features).view(self.latent_rep, self.in_channels, self.n_kernels_dec,
+            # "t_conv2.weight": self.t_conv2_weights(features).view(self.n_hidden, self.latent_rep, self.n_kernels_dec,
+            #                                                       self.n_kernels_dec),
+            # "t_conv2.bias": self.t_conv2_bias(features).view(-1),
+            "t_conv2.weight": self.t_conv2_weights(features).view(self.n_hidden, self.in_channels, self.n_kernels_dec,
                                                                   5),
-            "t_conv3.bias": self.t_conv3_bias(features).view(-1)
+            "t_conv2.bias": self.t_conv2_bias(features).view(-1)
         })
         return weights
 
@@ -108,10 +108,10 @@ class Autoencoder(nn.Module):
 
         self.t_conv1 = nn.ConvTranspose2d(
             latent_rep, hidden, kernel_size=(n_kernels_dec, n_kernels_dec), stride=stride_value, padding=padding_value)
+        # self.t_conv2 = nn.ConvTranspose2d(
+        #     hidden, latent_rep, kernel_size=(n_kernels_dec, n_kernels_dec), stride=stride_value, padding=padding_value)
         self.t_conv2 = nn.ConvTranspose2d(
-            hidden, latent_rep, kernel_size=(n_kernels_dec, n_kernels_dec), stride=stride_value, padding=padding_value)
-        self.t_conv3 = nn.ConvTranspose2d(
-            latent_rep, inout_channels, kernel_size=(3, 5), stride=(3, 5), padding=0)
+            hidden, inout_channels, kernel_size=(3, 5), stride=(3, 5), padding=0)
         print('')
 
     def encoder(self, x):
@@ -126,9 +126,9 @@ class Autoencoder(nn.Module):
     def decoder(self, x):
         z = F.relu(self.t_conv1(x))
         #print ("t_conv1: " + str(z.shape))
-        z = F.relu(self.t_conv2(z))
+        z = t.sigmoid(self.t_conv2(z))
         #print("t_conv2: " + str(z.shape))
-        z = t.sigmoid(self.t_conv3(z))
+        # z = (self.t_conv3(z))
         #print("t_conv3: " + str(z.shape))
         # z = t.sigmoid(self.t_conv3(z))
         return z

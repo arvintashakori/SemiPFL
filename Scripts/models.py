@@ -96,8 +96,8 @@ class Autoencoder(nn.Module):
         # self.pool = nn.MaxPool2d(3, stride=2)
         # self.conv3 = nn.Conv2d(8, latent_rep, n_kernels_enc, padding=padding_value)
         # batch norms
-        # self.batchNorm1 = nn.BatchNorm2d(16)
-        # self.batchNorm2 = nn.BatchNorm2d(4)
+        #self.batchNorm1 = nn.BatchNorm2d(16)
+        #self.batchNorm2 = nn.BatchNorm2d(4)
         # Decoder
 
         #        self.t_conv1 = nn.ConvTranspose2d(
@@ -126,7 +126,7 @@ class Autoencoder(nn.Module):
     def decoder(self, x):
         z = F.relu(self.t_conv1(x))
         #print ("t_conv1: " + str(z.shape))
-        z = t.sigmoid(self.t_conv2(z))
+        z = t.tanh(self.t_conv2(z))
         #print("t_conv2: " + str(z.shape))
         # z = (self.t_conv3(z))
         #print("t_conv3: " + str(z.shape))
@@ -142,11 +142,36 @@ class Autoencoder(nn.Module):
 class BASEModel(nn.Module):
     def __init__(self, latent_rep=4 * 3 * 6, out_dim=4, hidden_layer=16):  # 9 * 30 * 4
         super(BASEModel, self).__init__()
+        self.batch1 = nn.BatchNorm1d(latent_rep)
         self.fc1 = nn.Linear(latent_rep, hidden_layer)
+        self.batch2 = nn.BatchNorm1d(hidden_layer)
         self.fc2 = nn.Linear(hidden_layer, out_dim)
 
     def forward(self, x):
         x = x.view(x.size(0), -1)
-        x = F.relu(self.fc1(x))
+        x = self.batch1(x)
+        x = self.batch2(F.relu(self.fc1(x)))
         x = F.log_softmax(self.fc2(x), dim=1)
         return x
+
+
+class MODEL(nn.Module):
+    def __init__(self, latent_rep_fc=4 * 3 * 6, out_dim=4, hidden_layer=16, inout_channels=1, hidden=16, n_kernels_enc=3,
+                 n_kernels_dec=3, latent_rep=4, stride_value=1, padding_value=1):  # 9 * 30 * 4
+        super(MODEL, self).__init__()
+        self.conv1 = nn.Conv2d(inout_channels, hidden,n_kernels_enc, padding=padding_value)  # hidden*9*30
+        self.conv2 = nn.Conv2d(hidden, latent_rep, n_kernels_enc, padding=padding_value)  # latent_rep*9*30
+        self.pool = nn.MaxPool2d((3, 5), stride=(3, 5))  # latent_rep*3*6
+        self.batch1 = nn.BatchNorm1d(latent_rep_fc)
+        self.fc1 = nn.Linear(latent_rep_fc, hidden_layer)
+        self.batch2 = nn.BatchNorm1d(hidden_layer)
+        self.fc2 = nn.Linear(hidden_layer, out_dim)
+
+    def forward(self, x):
+        z = F.relu(self.conv1(x))
+        z = self.pool(F.relu(self.conv2(z)))
+        z = z.view(z.size(0), -1)
+        z = self.batch1(z)
+        z = self.batch2(F.relu(self.fc1(z)))
+        z = F.log_softmax(self.fc2(z), dim=1)
+        return z

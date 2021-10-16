@@ -19,9 +19,9 @@ class parameters:
         self.seed = 0
         self.labels_list = ['JOG', 'JUM', 'STD', 'WAL']  # list of activities
         self.outputdim = len(self.labels_list)
-        # self.data_address = r"C:\Users\walke\Documents\GitHub\SemiPFL_Wenwen\MobiNpy_4_Act"  # data adress
-        self.data_address = os.path.abspath(os.path.join(
-            os.getcwd(), os.pardir)) + "/Datasets/MobiNpy_4_Act/"  # data adress
+        self.data_address = r"C:\Users\walke\Documents\GitHub\SemiPFL_Wenwen\MobiNpy_4_Act\user"  # data adress
+        # self.data_address = os.path.abspath(os.path.join(
+        #     os.getcwd(), os.pardir)) + "/Datasets/MobiNpy_4_Act/"  # data adress
         self.trial_number = 0  # which trial we use for this test
         self.label_ratio = 0.10  # ratio of labeled data
         self.eval_ratio = 0.30  # ratio of eval data
@@ -144,6 +144,7 @@ def SemiPFL(params):
             for sensor_values, _ in eval_loader[client_id]:
                 predicted_sensor_values = AE(sensor_values.to(device).float())
                 prvs_loss_for_AE += criteria_AE(predicted_sensor_values.to(device),sensor_values.to(device).float()).item() * sensor_values.size(0)
+                # every time, the loss is 47 and the length is around 6680
             prvs_loss_for_AE /= len(eval_loader[client_id].dataset)
 
         # inner updates -> obtaining theta_tilda

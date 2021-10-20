@@ -23,19 +23,18 @@ class parameters:
         self.trial_number = 0  # which trial we use for this test
         self.label_ratio = 0.10  # ratio of labeled data
         self.eval_ratio = 0.30  # ratio of eval data
-        self.number_of_client = 1  # total number of clients
+        self.number_of_client = 58  # total number of clients
         self.server_ID = [0]  # server ID
         self.batch_size = 128  # training batch size
         self.window_size = 30  # window size (for our case 30)
         self.width = 9  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
-        self.n_kernels = 16  # number of kernels for hypernetwork
         self.total_number_of_clients = 59  # total number of subjects (client + server)
-        self.learning_rate = 1e-2  # learning rate for optimizer
-        self.steps = 10  # total number of epochs
-        self.inner_step_for_AE = 20  # number of epochs to fine tunne the Autoencoder
-        self.inner_step_for_model = 20  # number of steps that server fine tune its model for user
+        self.learning_rate = 1e-3  # learning rate for optimizer
+        self.steps = 1000  # total number of epochs
+        self.inner_step_for_AE = 5  # number of epochs to fine tunne the Autoencoder
+        self.inner_step_for_model = 5  # number of steps that server fine tune its model for user
         self.model_loop = True  # feedback loop for user model
-        self.inner_step_for_client = 20  # number of steps that user fine tune its model
+        self.inner_step_for_client = 5  # number of steps that user fine tune its model
         self.inner_lr = 1e-3  # user learning rate
         self.inner_wd = 5e-5  # weight decay
         self.hidden_dim_for_HN = 10  # hidden dimension for hypernetwork
@@ -46,10 +45,31 @@ class parameters:
         self.AE_layer_2 = 128 # Autoencoder hidden layer 2 size
         self.latent_rep = 64 # latent reperesentation size
         self.base_model_hidden_layer = 16 # base model hidden layer size
-        self.spec_norm = False  # True if you want to use spectral norm
+        self.thr = 0.3 # AE threshould
 
 
 def SemiPFL(params):
+
+    # model initialization
+    hnet = HN(n_nodes = params.number_of_client,
+              embedding_dim = int(1 + params.number_of_client / 4),
+              hidden_dim = 100,
+              n_hidden = 10)  # initializing the hypernetwork
+
+    AE = Autoencoder(inout_dim = params.width * params.window_size,
+                     layer1 = params.AE_layer_1,
+                     layer2 = params.AE_layer_2,
+                     latent_rep = params.latent_rep)  # initializing the autoencoder
+
+    model = BASEModel(latent_rep=params.latent_rep,
+                      out_dim=params.outputdim,
+                      hidden_layer=params.base_model_hidden_layer)  # initilizing the base model
+
+    # send models to device
+    hnet.to(params.device)
+    AE.to(params.device)
+    model.to(params.device)
+
 
     # loading data
     nodes = Clients(address=params.data_address,
@@ -76,23 +96,6 @@ def SemiPFL(params):
         eval_loader.append(torch.utils.data.DataLoader(
             nodes.eval_data[i], batch_size=params.batch_size, shuffle=True))
 
-    # model initialization
-    hnet = HN(n_nodes = params.number_of_client,
-              embedding_dim = int(1 + params.number_of_client / 4))  # initializing the hypernetwork
-
-    AE = Autoencoder(inout_dim = params.width * params.window_size,
-                     layer1 = params.AE_layer_1,
-                     layer2 = params.AE_layer_2,
-                     latent_rep = params.latent_rep)  # initializing the autoencoder
-
-    model = BASEModel(latent_rep=params.latent_rep,
-                      out_dim=params.outputdim,
-                      hidden_layer=params.base_model_hidden_layer)  # initilizing the base model
-
-    # send models to device
-    hnet.to(params.device)
-    AE.to(params.device)
-    model.to(params.device)
 
     # list of generated personalized models for each user
     client_model = []
@@ -139,6 +142,7 @@ def SemiPFL(params):
             optimizer_hnet.zero_grad()
             optimizer_AE.zero_grad()
             for sensor_values, _ in client_loader[client_id]:
+                sensor_values = sensor_values.view(sensor_values.size(0), -1)
                 predicted_sensor_values = AE(sensor_values.to(params.device).float())
                 loss = criteria_AE(predicted_sensor_values.to(params.device).float(),sensor_values.to(params.device).float())
                 loss.backward()
@@ -188,11 +192,13 @@ def SemiPFL(params):
             optimizer_base.zero_grad()
             for sensor_values, activity in server_loaders:
                 sensor_values = sensor_values.view(sensor_values.size(0), -1)
-                encoded_sensor_values = AE.encoder(sensor_values.to(params.device).float())
-                predicted_activity = client_model[client_id](encoded_sensor_values)
-                loss = criteria_model(predicted_activity.to(params.device), activity.to(params.device))
-                loss.backward()
-                optimizer_base.step()
+                # check if the sample is similar to user data
+                if criteria_AE(AE(sensor_values.to(params.device).float()),sensor_values.to(params.device).float()).item() < params.thr:
+                    encoded_sensor_values = AE.encoder(sensor_values.to(params.device).float())
+                    predicted_activity = client_model[client_id](encoded_sensor_values)
+                    loss = criteria_model(predicted_activity.to(params.device), activity.to(params.device))
+                    loss.backward()
+                    optimizer_base.step()
             #print('model epoch [{}/{}], loss:{:.4f}'.format(i + 1, params.inner_step_for_model, loss.data))
 
         with torch.no_grad():
@@ -211,10 +217,10 @@ def SemiPFL(params):
 
         client_model[client_id].train()
         AE.eval()
-        for param in client_model[client_id].parameters():
-            param.requires_grad = False
+        #for param in client_model[client_id].parameters():
+         #   param.requires_grad = False
 
-        client_model[client_id].fc2 = nn.Linear(params.base_model_hidden_layer, params.outputdim).to(params.device)
+        #client_model[client_id].fc2 = nn.Linear(params.base_model_hidden_layer, params.outputdim).to(params.device)
 
         for i in range(params.inner_step_for_client):
             optimizer_base.zero_grad()

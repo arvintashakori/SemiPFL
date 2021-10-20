@@ -30,7 +30,7 @@ class parameters:
         self.width = 9  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
         self.total_number_of_clients = 59  # total number of subjects (client + server)
         self.learning_rate = 1e-3  # learning rate for optimizer
-        self.steps = 1000  # total number of epochs
+        self.steps = 100  # total number of epochs
         self.inner_step_for_AE = 5  # number of epochs to fine tunne the Autoencoder
         self.inner_step_for_model = 5  # number of steps that server fine tune its model for user
         self.model_loop = True  # feedback loop for user model
@@ -45,8 +45,7 @@ class parameters:
         self.AE_layer_2 = 128 # Autoencoder hidden layer 2 size
         self.latent_rep = 64 # latent reperesentation size
         self.base_model_hidden_layer = 16 # base model hidden layer size
-        self.thr = 0.3 # AE threshould
-
+        self.thr = 0.2 # threshould to find similar datapoints for user
 
 def SemiPFL(params):
 

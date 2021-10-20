@@ -9,29 +9,13 @@ t.manual_seed(0)
 
 class HN(nn.Module):
     def __init__(
-            self, n_nodes, embedding_dim, in_channels=1, out_dim=4, n_kernels=16, hidden_dim=100,
-            spec_norm=False, n_hidden=1, n_kernels_enc=3, n_kernels_dec=3, latent_rep=4, stride_value=1,
-            padding_value=1):
+            self, n_nodes, embedding_dim, ):
         super().__init__()
-        self.in_channels = in_channels
-        self.out_dim = out_dim
-        self.n_kernels = n_kernels
-        self.n_kernels_enc = n_kernels_enc
-        self.n_kernels_dec = n_kernels_dec
-        self.latent_rep = latent_rep
-        self.n_hidden = n_hidden
-        self.embeddings = nn.Embedding(
-            num_embeddings=n_nodes, embedding_dim=embedding_dim)
-        layers = [
-            spectral_norm(nn.Linear(embedding_dim, hidden_dim)) if spec_norm else nn.Linear(
-                embedding_dim, hidden_dim),
-        ]
+        self.embeddings = nn.Embedding(num_embeddings=n_nodes, embedding_dim=embedding_dim)
+        layers = [spectral_norm(nn.Linear(embedding_dim, hidden_dim)) if spec_norm else nn.Linear(embedding_dim, hidden_dim),]
         for _ in range(n_hidden):
             layers.append(nn.ReLU(inplace=True))
-            layers.append(
-                spectral_norm(nn.Linear(hidden_dim, hidden_dim)) if spec_norm else nn.Linear(
-                    hidden_dim, hidden_dim),
-            )
+            layers.append(spectral_norm(nn.Linear(hidden_dim, hidden_dim)) if spec_norm else nn.Linear(hidden_dim, hidden_dim),)
         self.mlp = nn.Sequential(*layers)
         self.conv1_weights = nn.Linear(
             hidden_dim, self.n_kernels * self.in_channels * self.n_kernels_enc * self.n_kernels_enc)
@@ -84,94 +68,50 @@ class HN(nn.Module):
 
 
 class Autoencoder(nn.Module):
-    def __init__(self, inout_channels=1, hidden=16, n_kernels_enc=3,
-                 n_kernels_dec=3, latent_rep=4, stride_value=1, padding_value=1):
+    def __init__(self, inout_dim = 270, layer1 = 256, layer2 = 128, latent_rep = 64):
         super(Autoencoder, self).__init__()
+
         # Encoder
-        self.conv1 = nn.Conv2d(inout_channels, hidden,
-                               n_kernels_enc, padding=padding_value)  # hidden*9*30
-        self.conv2 = nn.Conv2d(
-            hidden, latent_rep, n_kernels_enc, padding=padding_value)  # latent_rep*9*30
-        self.pool = nn.MaxPool2d((3, 5), stride=(3, 5))  # latent_rep*3*6
-        # self.pool = nn.MaxPool2d(3, stride=2)
-        # self.conv3 = nn.Conv2d(8, latent_rep, n_kernels_enc, padding=padding_value)
-        # batch norms
-        #self.batchNorm1 = nn.BatchNorm2d(16)
-        #self.batchNorm2 = nn.BatchNorm2d(4)
+        self.E1 = nn.Linear(inout_dim, layer1)
+        self.E2 = nn.Linear(layer1, layer2)
+        self.E3 = nn.Linear(layer2, latent_rep)
+
         # Decoder
-
-        #        self.t_conv1 = nn.ConvTranspose2d(
-        #            latent_rep, hidden, kernel_size=(n_kernels_dec, n_kernels_dec), stride=stride_value, padding=padding_value)
-        #        self.t_conv2 = nn.ConvTranspose2d(
-        #            hidden, inout_channels, kernel_size=(n_kernels_dec, n_kernels_dec), stride=stride_value,
-        #            padding=padding_value)
-
-        self.t_conv1 = nn.ConvTranspose2d(
-            latent_rep, hidden, kernel_size=(n_kernels_dec, n_kernels_dec), stride=stride_value, padding=padding_value)
-        # self.t_conv2 = nn.ConvTranspose2d(
-        #     hidden, latent_rep, kernel_size=(n_kernels_dec, n_kernels_dec), stride=stride_value, padding=padding_value)
-        self.t_conv2 = nn.ConvTranspose2d(
-            hidden, inout_channels, kernel_size=(3, 5), stride=(3, 5), padding=0)
-        print('')
+        self.D1 = nn.Linear(latent_rep, layer2)
+        self.D2 = nn.Linear(layer2, layer1)
+        self.D3 = nn.Linear(layer1, inout_dim)
 
     def encoder(self, x):
-        #print("input: " + str(x.shape))
-        z = F.relu(self.conv1(x))
-        #print("conv1: " + str(z.shape))
-        z = self.pool(F.relu(self.conv2(z)))
-        #print("conv2: " + str(z.shape))
-        # z = F.relu(self.conv3(z))
-        return z
+        x = F.relu(self.E1(x))
+        x = F.relu(self.E2(x))
+        x = self.E3(x)
+        return x
 
     def decoder(self, x):
-        z = F.relu(self.t_conv1(x))
-        #print ("t_conv1: " + str(z.shape))
-        z = t.tanh(self.t_conv2(z))
-        #print("t_conv2: " + str(z.shape))
-        # z = (self.t_conv3(z))
-        #print("t_conv3: " + str(z.shape))
-        # z = t.sigmoid(self.t_conv3(z))
-        return z
+        x = F.relu(self.D1(x))
+        x = F.relu(self.D2(x))
+        x = F.tanh(self.D3(x))
+        return x
 
     def forward(self, input):
-        latent_representation = self.encoder(input)
-        output = self.decoder(latent_representation)
+        encoded_x = self.encoder(input)
+        output = self.decoder(encoded_x)
         return output
 
 
+
+
 class BASEModel(nn.Module):
-    def __init__(self, latent_rep=4 * 3 * 6, out_dim=4, hidden_layer=16):  # 9 * 30 * 4
+    def __init__(self, latent_rep=64, out_dim=4, hidden_layer=16):
         super(BASEModel, self).__init__()
+
         self.batch1 = nn.BatchNorm1d(latent_rep)
-        self.fc1 = nn.Linear(latent_rep, hidden_layer)
         self.batch2 = nn.BatchNorm1d(hidden_layer)
+        self.fc1 = nn.Linear(latent_rep, hidden_layer)
         self.fc2 = nn.Linear(hidden_layer, out_dim)
 
     def forward(self, x):
-        x = x.view(x.size(0), -1)
         x = self.batch1(x)
         x = self.batch2(F.relu(self.fc1(x)))
         x = F.log_softmax(self.fc2(x), dim=1)
         return x
-
-
-class MODEL(nn.Module):
-    def __init__(self, latent_rep_fc=4 * 3 * 6, out_dim=4, hidden_layer=16, inout_channels=1, hidden=16, n_kernels_enc=3,
-                 n_kernels_dec=3, latent_rep=4, stride_value=1, padding_value=1):  # 9 * 30 * 4
-        super(MODEL, self).__init__()
-        self.conv1 = nn.Conv2d(inout_channels, hidden,n_kernels_enc, padding=padding_value)  # hidden*9*30
-        self.conv2 = nn.Conv2d(hidden, latent_rep, n_kernels_enc, padding=padding_value)  # latent_rep*9*30
-        self.pool = nn.MaxPool2d((3, 5), stride=(3, 5))  # latent_rep*3*6
-        self.batch1 = nn.BatchNorm1d(latent_rep_fc)
-        self.fc1 = nn.Linear(latent_rep_fc, hidden_layer)
-        self.batch2 = nn.BatchNorm1d(hidden_layer)
-        self.fc2 = nn.Linear(hidden_layer, out_dim)
-
-    def forward(self, x):
-        z = F.relu(self.conv1(x))
-        z = self.pool(F.relu(self.conv2(z)))
-        z = z.view(z.size(0), -1)
-        z = self.batch1(z)
-        z = self.batch2(F.relu(self.fc1(z)))
-        z = F.log_softmax(self.fc2(z), dim=1)
-        return z

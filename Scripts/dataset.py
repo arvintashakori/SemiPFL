@@ -3,6 +3,9 @@ import random
 import itertools
 import torch
 import numpy as np
+import matplotlib.pyplot as plt
+from sklearn import preprocessing
+from utils import get_default_device
 
 torch.manual_seed(0)
 np.random.seed(0)
@@ -30,17 +33,20 @@ class DatasetFromNPY(Dataset):
         self.labels = self.data[:, height * width]
         self.labels = np.array(list(map(lambda x: list(num_labels[0]).index(x), self.data[:, height * width])))
         self.data = np.delete(self.data, -1, axis=1)
+        scaler = preprocessing.StandardScaler().fit(self.data)
+        self.data = scaler.transform(self.data)
 
     def __getitem__(self, index):
         single_adl_label = int(self.labels[index])
         adl_as_np = np.asarray(self.data[index, :]).reshape(
             self.width, self.height).astype(float)
-        adl_as_np=adl_as_np.transpose()
-        min = np.amin(adl_as_np)
-        max = np.amax(adl_as_np)
-        adl_as_np=(adl_as_np-min)/(max-min)
-        adl_as_tensor=torch.tensor(adl_as_np, device='cuda')
-        adl_as_tensor=adl_as_tensor.unsqueeze(dim=0)
+        adl_as_np = adl_as_np.transpose()
+        # min = np.amin(adl_as_np)
+        # max = np.amax(adl_as_np)
+        # adl_as_np=(adl_as_np-min)/(max-min)
+        device = get_default_device()
+        adl_as_tensor = torch.tensor(adl_as_np, device=device)
+        adl_as_tensor = adl_as_tensor.unsqueeze(dim=0)
         return adl_as_tensor, single_adl_label
 
     def __len__(self):
@@ -52,10 +58,12 @@ def assign_loaders(address, trial_number, label_ratio, eval_ratio, server_ID, wi
     server_data = []
     num_user_list = range(num_user)
     for server in server_ID:
-        file_name=address + str(server) + 'trail_'+ str(trial_number) + '.npy'
+        file_name = address + 'user' + \
+                            str(server) + 'trail_' + str(trial_number) + '.npy'
+        # file_name = address + str(server) + 'trail_' + str(trial_number) + '.npy'
         server_data.append(np.load(file_name, mmap_mode='r'))
     server_loaders = DatasetFromNPY(np.array(list(itertools.chain.from_iterable(server_data))),
-                                        width, windowsize, transform)  # load test dataset
+                                    width, windowsize, transform)  # load test dataset
     num_user_list = np.delete(num_user_list, server_ID)
     # labels_list = np.unique(server_data[:, windowsize * width])
 
@@ -65,9 +73,9 @@ def assign_loaders(address, trial_number, label_ratio, eval_ratio, server_ID, wi
     client_lablled_dataset = []
     eval_dataset = []
     for user in num_user_list:  # return a list of user data and shuffle each user's data before return
-        file_name = address + str(user) + 'trail_' + str(trial_number) + '.npy'
-#         file_name = address + 'user' + \
-#                     str(user) + 'trail_' + str(trial_number) + '.npy'
+        # file_name = address + str(user) + 'trail_' + str(trial_number) + '.npy'
+        file_name = address + 'user' + \
+                    str(user) + 'trail_' + str(trial_number) + '.npy'
         client_data = np.load(file_name, mmap_mode='r')
         client_data = np.array(client_data)
         np.random.shuffle(client_data)
@@ -87,6 +95,3 @@ def assign_loaders(address, trial_number, label_ratio, eval_ratio, server_ID, wi
     # server_loaders = torch.utils.data.DataLoader(
     #     server_loaders, batch_size=batch_size, shuffle=True)
     return client_dataset, client_lablled_dataset, server_loaders, eval_dataset
-
-
-

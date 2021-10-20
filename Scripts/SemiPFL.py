@@ -19,9 +19,7 @@ class parameters:
         self.seed = 0
         self.labels_list = ['JOG', 'JUM', 'STD', 'WAL']  # list of activities
         self.outputdim = len(self.labels_list)
-        self.data_address = r"C:\Users\walke\Documents\GitHub\SemiPFL_Wenwen\MobiNpy_4_Act\user"  # data adress
-        # self.data_address = os.path.abspath(os.path.join(
-        #     os.getcwd(), os.pardir)) + "/Datasets/MobiNpy_4_Act/"  # data adress
+        self.data_address = os.path.abspath(os.path.join(os.getcwd(), os.pardir)) + "\\Datasets\\MobiNpy_4_Act\\"  # data adress
         self.trial_number = 0  # which trial we use for this test
         self.label_ratio = 0.10  # ratio of labeled data
         self.eval_ratio = 0.30  # ratio of eval data
@@ -32,34 +30,28 @@ class parameters:
         self.width = 9  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
         self.n_kernels = 16  # number of kernels for hypernetwork
         self.total_number_of_clients = 59  # total number of subjects (client + server)
-        self.learning_rate = 1e-3  # learning rate for optimizer
+        self.learning_rate = 1e-2  # learning rate for optimizer
         self.steps = 10  # total number of epochs
-        self.inner_step_for_AE = 5  # number of epochs to fine tunne the Autoencoder
-        self.inner_step_server_finetune = 5  # number of steps in the server side to finetune
-        self.inner_step_for_model = 5  # number of steps that server fine tune its hn and user embedding parameters
-        self.model_loop = False  # feedback loop for user model
-        self.inner_step_for_client = 5  # number of steps that user fine tune its model
+        self.inner_step_for_AE = 20  # number of epochs to fine tunne the Autoencoder
+        self.inner_step_for_model = 20  # number of steps that server fine tune its model for user
+        self.model_loop = True  # feedback loop for user model
+        self.inner_step_for_client = 20  # number of steps that user fine tune its model
         self.inner_lr = 1e-3  # user learning rate
         self.inner_wd = 5e-5  # weight decay
-        self.inout_channels = 1  # number of channels
-        self.hidden = 16  # Autoencoder layer 2 parameters
-        self.n_kernels_enc = 3  # autoencoder encoder kernel size
-        self.hidden_dim_for_HN = 100  # hidden dimension for hypernetwork
-        self.n_kernels_dec = 3  # autoencoder decoder kernel size
-        self.latent_rep = 4  # latent reperesentation size
-        self.n_hidden_HN = 100  # number of hidden layers in hypernetworks
-        self.stride_value = 1  # stride value for autoencoder
-        self.padding_value = 1  # padding value for autoencoder
-        self.model_hidden_layer =128  # final model hidden layer size
+        self.hidden_dim_for_HN = 10  # hidden dimension for hypernetwork
+        self.transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+        self.device = get_default_device()
+        # Autoencoder and base model parameters
+        self.AE_layer_1 = 256 # Autoencoder hidden layer 1 size
+        self.AE_layer_2 = 128 # Autoencoder hidden layer 2 size
+        self.latent_rep = 64 # latent reperesentation size
+        self.base_model_hidden_layer = 16 # base model hidden layer size
         self.spec_norm = False  # True if you want to use spectral norm
 
 
 def SemiPFL(params):
-    # initialization
-    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
-    device = get_default_device()
 
-    # laoding data
+    # loading data
     nodes = Clients(address=params.data_address,
                     trial_number=params.trial_number,
                     label_ratio=params.label_ratio,
@@ -67,15 +59,14 @@ def SemiPFL(params):
                     eval_ratio=params.eval_ratio,
                     window_size=params.window_size,
                     width=params.width,
-                    transform=transform,
+                    transform=params.transform,
                     num_user=params.total_number_of_clients)
 
-    # dataloaders
+    # initializing dataloaders
     client_loader = []
     client_labeled_loaders = []
     eval_loader = []
-    server_loaders = torch.utils.data.DataLoader(
-        nodes.server_loaders, batch_size=params.batch_size, shuffle=True)
+    server_loaders = torch.utils.data.DataLoader(nodes.server_loaders, batch_size=params.batch_size, shuffle=True)
 
     for i in range(params.number_of_client):
         client_loader.append(torch.utils.data.DataLoader(
@@ -86,23 +77,22 @@ def SemiPFL(params):
             nodes.eval_data[i], batch_size=params.batch_size, shuffle=True))
 
     # model initialization
-    hnet = HN(n_nodes=params.number_of_client, embedding_dim=int(1 + params.number_of_client / 4),
-              in_channels=params.inout_channels, out_dim=params.outputdim, n_kernels=params.n_kernels,
-              hidden_dim=params.hidden_dim_for_HN,
-              spec_norm=params.spec_norm, n_hidden=params.hidden, #params.n_hidden_HN,
-              n_kernels_enc=params.n_kernels_enc,
-              n_kernels_dec=params.n_kernels_dec, latent_rep=params.latent_rep, stride_value=params.stride_value,
-              padding_value=params.padding_value)  # initializing the hypernetwork
-    AE = Autoencoder(inout_channels=params.inout_channels, hidden=params.hidden, n_kernels_enc=params.n_kernels_enc,
-                     n_kernels_dec=params.n_kernels_dec, latent_rep=params.latent_rep, stride_value=params.stride_value,
-                     padding_value=params.padding_value)  # initializing the autoencoder
-    model = BASEModel(latent_rep= 4 * 3 * 6, #params.width * params.window_size * params.latent_rep,
-                      out_dim=params.outputdim, hidden_layer=params.model_hidden_layer)  # initilizing the base model
+    hnet = HN(n_nodes = params.number_of_client,
+              embedding_dim = int(1 + params.number_of_client / 4))  # initializing the hypernetwork
+
+    AE = Autoencoder(inout_dim = params.width * params.window_size,
+                     layer1 = params.AE_layer_1,
+                     layer2 = params.AE_layer_2,
+                     latent_rep = params.latent_rep)  # initializing the autoencoder
+
+    model = BASEModel(latent_rep=params.latent_rep,
+                      out_dim=params.outputdim,
+                      hidden_layer=params.base_model_hidden_layer)  # initilizing the base model
 
     # send models to device
-    hnet.to(device)
-    AE.to(device)
-    model.to(device)
+    hnet.to(params.device)
+    AE.to(params.device)
+    model.to(params.device)
 
     # list of generated personalized models for each user
     client_model = []
@@ -110,11 +100,9 @@ def SemiPFL(params):
         client_model.append(model)
 
     # optimizer and loss functions
-    optimizer = torch.optim.Adam(
-        params=hnet.parameters(), lr=params.learning_rate)
-    # I was using this before: BCEWithLogitsLoss()
+    optimizer_hnet = torch.optim.Adam(params=hnet.parameters(), lr=params.learning_rate)
+
     criteria_AE = torch.nn.MSELoss()
-    # I was using this before: CrossEntropyLoss()
     criteria_model = torch.nn.NLLLoss()
 
     # SemiPFL begins
@@ -126,40 +114,36 @@ def SemiPFL(params):
         client_id = random.choice(range(params.number_of_client))
 
         # produce & load local network weights
-        weights = hnet(torch.tensor([client_id], dtype=torch.long).to(device))
+        weights = hnet(torch.tensor([client_id], dtype=torch.long).to(params.device))
         AE.load_state_dict(weights)
 
         # init inner optimizer
-        inner_optim = torch.optim.Adam(
-            AE.parameters(), lr=params.inner_lr, weight_decay=params.inner_wd)
+        optimizer_AE = torch.optim.Adam(AE.parameters(), lr=params.inner_lr)
 
         # storing theta_i for later calculating delta theta
-        inner_state = OrderedDict(
-            {k: tensor.data for k, tensor in weights.items()})
+        inner_state = OrderedDict({k: tensor.data for k, tensor in weights.items()})
 
         # NOTE: evaluation on sent model
         with torch.no_grad():
             AE.eval()
             prvs_loss_for_AE = 0
             for sensor_values, _ in eval_loader[client_id]:
-                predicted_sensor_values = AE(sensor_values.to(device).float())
-                prvs_loss_for_AE += criteria_AE(predicted_sensor_values.to(device),sensor_values.to(device).float()).item() * sensor_values.size(0)
-                # every time, the loss is 47 and the length is around 6680
+                sensor_values = sensor_values.view(sensor_values.size(0), -1)
+                predicted_sensor_values = AE(sensor_values.to(params.device).float())
+                prvs_loss_for_AE += criteria_AE(predicted_sensor_values.to(params.device),sensor_values.to(params.device).float()).item() * sensor_values.size(0)
             prvs_loss_for_AE /= len(eval_loader[client_id].dataset)
 
-        # inner updates -> obtaining theta_tilda
+        # Step 2: inner updates -> obtaining theta_tilda
         AE.train()
-        total_loss = 0
-        for i in range(params.inner_step_server_finetune):
-            optimizer.zero_grad()
-            inner_optim.zero_grad()
+        for i in range(params.inner_step_for_AE):
+            optimizer_hnet.zero_grad()
+            optimizer_AE.zero_grad()
             for sensor_values, _ in client_loader[client_id]:
-                predicted_sensor_values = AE(sensor_values.to(device).float())
-                loss = criteria_AE(predicted_sensor_values.to(device).float(),sensor_values.to(device).float())
+                predicted_sensor_values = AE(sensor_values.to(params.device).float())
+                loss = criteria_AE(predicted_sensor_values.to(params.device).float(),sensor_values.to(params.device).float())
                 loss.backward()
-                inner_optim.step()
-            #print('AE model epoch [{}/{}], loss:{:.4f}'
-                #  .format(i + 1, params.inner_step_server_finetune, loss.data))
+                optimizer_AE.step()
+            #print('AE model epoch [{}/{}], loss:{:.4f}'.format(i + 1, params.inner_step_server_finetune, loss.data))
 
 
 
@@ -168,26 +152,25 @@ def SemiPFL(params):
             AE.eval()
             prvs_loss_for_AE_updated = 0
             for sensor_values, _ in eval_loader[client_id]:
-                predicted_sensor_values = AE(sensor_values.to(device).float())
-                prvs_loss_for_AE_updated += criteria_AE(predicted_sensor_values.to(device),sensor_values.to(device).float()).item() * sensor_values.size(0)
+                sensor_values = sensor_values.view(sensor_values.size(0), -1)
+                predicted_sensor_values = AE(sensor_values.to(params.device).float())
+                prvs_loss_for_AE_updated += criteria_AE(predicted_sensor_values.to(params.device),sensor_values.to(params.device).float()).item() * sensor_values.size(0)
             prvs_loss_for_AE_updated /= len(eval_loader[client_id].dataset)
 
-        optimizer.zero_grad()
+        optimizer_hnet.zero_grad()
         final_state = AE.state_dict()
 
         # calculating delta theta
-        delta_theta = OrderedDict(
-            {k: inner_state[k] - final_state[k] for k in weights.keys()})
+        delta_theta = OrderedDict({k: inner_state[k] - final_state[k] for k in weights.keys()})
 
         # calculating ds = tphi gradient
-        hnet_grads = torch.autograd.grad(list(
-            weights.values()), hnet.parameters(), grad_outputs=list(delta_theta.values()))
+        hnet_grads = torch.autograd.grad(list(weights.values()), hnet.parameters(), grad_outputs=list(delta_theta.values()))
 
         # update hnet weights
         for p, g in zip(hnet.parameters(), hnet_grads):
             p.grad = g
         torch.nn.utils.clip_grad_norm_(hnet.parameters(), 50)
-        optimizer.step()
+        optimizer_hnet.step()
 
 
 
@@ -197,53 +180,52 @@ def SemiPFL(params):
             client_model[client_id] = model
 
         client_model[client_id].train()
-
-        # init inner optimizer
-        inner_optim = torch.optim.Adam(
-            client_model[client_id].parameters(), lr=params.inner_lr, weight_decay=params.inner_wd)
+        AE.eval()
+        # init base optimizer
+        optimizer_base = torch.optim.Adam(client_model[client_id].parameters(), lr=params.inner_lr)
 
         for i in range(params.inner_step_for_model):
-            inner_optim.zero_grad()
+            optimizer_base.zero_grad()
             for sensor_values, activity in server_loaders:
-                encoded_sensor_values = AE.encoder(sensor_values.to(device).float())
+                sensor_values = sensor_values.view(sensor_values.size(0), -1)
+                encoded_sensor_values = AE.encoder(sensor_values.to(params.device).float())
                 predicted_activity = client_model[client_id](encoded_sensor_values)
-                loss = criteria_model(predicted_activity.to(device), activity.to(device))
+                loss = criteria_model(predicted_activity.to(params.device), activity.to(params.device))
                 loss.backward()
-                inner_optim.step()
-            #print('model epoch [{}/{}], loss:{:.4f}'
-               #   .format(i + 1, params.inner_step_for_model, loss.data))
+                optimizer_base.step()
+            #print('model epoch [{}/{}], loss:{:.4f}'.format(i + 1, params.inner_step_for_model, loss.data))
 
         with torch.no_grad():
             client_model[client_id].eval()
             prvs_loss_server_model = 0
             f1_score_server = 0
             for sensor_values, activity in eval_loader[client_id]:
-                encoded_sensor_values = AE.encoder(sensor_values.to(device).float())
+                sensor_values = sensor_values.view(sensor_values.size(0), -1)
+                encoded_sensor_values = AE.encoder(sensor_values.to(params.device).float())
                 predicted_activity = client_model[client_id](encoded_sensor_values)
-                prvs_loss_server_model += criteria_model(
-                    predicted_activity, activity.to(device)).item() * sensor_values.size(0)
+                prvs_loss_server_model += criteria_model(predicted_activity, activity.to(params.device)).item() * sensor_values.size(0)
                 f1_score_server += f1_loss(activity, predicted_activity) * sensor_values.size(0)
-            client_model[client_id].train()
             prvs_loss_server_model /= len(eval_loader[client_id].dataset)
             f1_score_server /= len(eval_loader[client_id].dataset)
 
-        # fine-tune the model on user labeled dataset (I commented that since looks like its not improving)
+
+        client_model[client_id].train()
+        AE.eval()
         for param in client_model[client_id].parameters():
             param.requires_grad = False
 
-        client_model[client_id].fc2 = nn.Linear(
-            params.model_hidden_layer, params.outputdim).to(device)
+        client_model[client_id].fc2 = nn.Linear(params.base_model_hidden_layer, params.outputdim).to(params.device)
 
-        for i in range(params.inner_step_for_model):
-            inner_optim.zero_grad()
+        for i in range(params.inner_step_for_client):
+            optimizer_base.zero_grad()
             for sensor_values, activity in client_labeled_loaders[client_id]:
-                encoded_sensor_values = AE.encoder(sensor_values.to(device).float())
+                sensor_values = sensor_values.view(sensor_values.size(0), -1)
+                encoded_sensor_values = AE.encoder(sensor_values.to(params.device).float())
                 predicted_activity = client_model[client_id](encoded_sensor_values)
-                loss = criteria_model(predicted_activity, activity.to(device))
+                loss = criteria_model(predicted_activity, activity.to(params.device))
                 loss.backward()
-                inner_optim.step()
-            #print('modelfine epoch [{}/{}], loss:{:.4f}'
-             #     .format(i + 1, params.inner_step_for_model, loss.data))
+                optimizer_base.step()
+            #print('modelfine epoch [{}/{}], loss:{:.4f}'.format(i + 1, params.inner_step_for_client, loss.data))
 
         # Evaluate the model on user dataset
         with torch.no_grad():
@@ -251,16 +233,17 @@ def SemiPFL(params):
             prvs_loss_fine_tuned = 0
             f1_score_user = 0
             for sensor_values, activity in eval_loader[client_id]:
-                encoded_sensor_values = AE.encoder(sensor_values.to(device).float())
+                sensor_values = sensor_values.view(sensor_values.size(0), -1)
+                encoded_sensor_values = AE.encoder(sensor_values.to(params.device).float())
+                encoded_sensor_values = AE.encoder(sensor_values.to(params.device).float())
                 predicted_activity = client_model[client_id](encoded_sensor_values)
                 prvs_loss_fine_tuned += criteria_model(
-                    predicted_activity, activity.to(device)).item() * sensor_values.size(0)
+                    predicted_activity, activity.to(params.device)).item() * sensor_values.size(0)
                 f1_score_user += f1_loss(activity, predicted_activity) * sensor_values.size(0)
             client_model[client_id].train()
             prvs_loss_fine_tuned /= len(eval_loader[client_id].dataset)
             f1_score_user /= len(eval_loader[client_id].dataset)
-            step_iter.set_description(
-                f"S:{step + 1},ID:{client_id},AE:{prvs_loss_for_AE:.4f},AE_f:{prvs_loss_for_AE_updated:.4f},Server_l:{prvs_loss_server_model:.4f},server_f1: {100*f1_score_server:.2f},User_l:{prvs_loss_fine_tuned:.4f},user_f1: {100*f1_score_user:.4f}\n")
+        step_iter.set_description(f"S:{step + 1},ID:{client_id},AE:{prvs_loss_for_AE:.4f},AE_f:{prvs_loss_for_AE_updated:.4f},Server_l:{prvs_loss_server_model:.4f},server_f1: {100*f1_score_server:.2f},User_l:{prvs_loss_fine_tuned:.4f},user_f1: {100*f1_score_user:.4f}\n")
 
         # save results
         results['Step'].append(step + 1)

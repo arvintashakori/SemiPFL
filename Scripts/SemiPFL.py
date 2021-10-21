@@ -21,16 +21,16 @@ class parameters:
         self.outputdim = len(self.labels_list)
         self.data_address = os.path.abspath(os.path.join(os.getcwd(), os.pardir)) + "\\Datasets\\MobiNpy_4_Act\\"  # data adress
         self.trial_number = 0  # which trial we use for this test
-        self.label_ratio = 0.10  # ratio of labeled data
+        self.label_ratio = 0.01  # ratio of labeled data
         self.eval_ratio = 0.30  # ratio of eval data
-        self.number_of_client = 58  # total number of clients
-        self.server_ID = [0]  # server ID
+        self.number_of_client = 54  # total number of clients
+        self.server_ID = [0, 1, 2, 3, 4]  # server ID
         self.batch_size = 128  # training batch size
         self.window_size = 30  # window size (for our case 30)
         self.width = 9  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
         self.total_number_of_clients = 59  # total number of subjects (client + server)
         self.learning_rate = 1e-3  # learning rate for optimizer
-        self.steps = 100  # total number of epochs
+        self.steps = 200  # total number of epochs
         self.inner_step_for_AE = 5  # number of epochs to fine tunne the Autoencoder
         self.inner_step_for_model = 5  # number of steps that server fine tune its model for user
         self.model_loop = True  # feedback loop for user model
@@ -46,6 +46,72 @@ class parameters:
         self.latent_rep = 64 # latent reperesentation size
         self.base_model_hidden_layer = 16 # base model hidden layer size
         self.thr = 0.2 # threshould to find similar datapoints for user
+        self.general_results = True # if True calculate overal values not related to that user
+
+def AE_evaluate(client_AE, eval_loader, number_of_clients, criteria_AE, general_results, id = 0):
+    with torch.no_grad():
+        total_loss = 0
+        if general_results:
+            for client_id in range(number_of_clients):
+                prvs_loss_for_AE = 0
+                for sensor_values, _ in eval_loader[client_id]:
+                    client_AE[client_id].eval()
+                    sensor_values = sensor_values.view(sensor_values.size(0), -1)
+                    predicted_sensor_values = client_AE[client_id](sensor_values.to(params.device).float())
+                    prvs_loss_for_AE += criteria_AE(predicted_sensor_values.to(params.device),
+                                                    sensor_values.to(params.device).float()).item() * sensor_values.size(0)
+                prvs_loss_for_AE /= len(eval_loader[client_id].dataset)
+                total_loss += prvs_loss_for_AE/number_of_clients
+        else:
+            client_AE[id].eval()
+            prvs_loss_for_AE = 0
+            for sensor_values, _ in eval_loader[id]:
+                sensor_values = sensor_values.view(sensor_values.size(0), -1)
+                predicted_sensor_values = client_AE[id](sensor_values.to(params.device).float())
+                prvs_loss_for_AE += criteria_AE(predicted_sensor_values.to(params.device),
+                                                sensor_values.to(params.device).float()).item() * sensor_values.size(0)
+            total_loss = prvs_loss_for_AE / len(eval_loader[id].dataset)
+
+        return total_loss
+
+
+def model_evaluate(client_AE, client_model, eval_loader, number_of_clients, criteria_model, general_results, id = 0):
+    with torch.no_grad():
+        total_loss = 0
+        total_f1 = 0
+        if general_results:
+            for client_id in range(number_of_clients):
+                client_model[client_id].eval()
+                client_AE[client_id].eval()
+                prvs_loss_server_model = 0
+                f1_score_server = 0
+                for sensor_values, activity in eval_loader[client_id]:
+                    sensor_values = sensor_values.view(sensor_values.size(0), -1)
+                    encoded_sensor_values = client_AE[client_id].encoder(sensor_values.to(params.device).float())
+                    predicted_activity = client_model[client_id](encoded_sensor_values)
+                    prvs_loss_server_model += criteria_model(predicted_activity,
+                                                             activity.to(params.device)).item() * sensor_values.size(0)
+                    f1_score_server += f1_loss(activity, predicted_activity) * sensor_values.size(0)
+                prvs_loss_server_model /= len(eval_loader[client_id].dataset)
+                f1_score_server /= len(eval_loader[client_id].dataset)
+                total_loss += prvs_loss_server_model / number_of_clients
+                total_f1 += f1_score_server / number_of_clients
+        else:
+            client_model[id].eval()
+            prvs_loss_server_model = 0
+            f1_score_server = 0
+            for sensor_values, activity in eval_loader[id]:
+                sensor_values = sensor_values.view(sensor_values.size(0), -1)
+                encoded_sensor_values = client_AE[id].encoder(sensor_values.to(params.device).float())
+                predicted_activity = client_model[id](encoded_sensor_values)
+                prvs_loss_server_model += criteria_model(predicted_activity,
+                                                         activity.to(params.device)).item() * sensor_values.size(0)
+                f1_score_server += f1_loss(activity, predicted_activity) * sensor_values.size(0)
+            total_loss = prvs_loss_server_model / len(eval_loader[id].dataset)
+            total_f1 = f1_score_server / len(eval_loader[id].dataset)
+
+        return total_loss, total_f1
+
 
 def SemiPFL(params):
 
@@ -85,24 +151,32 @@ def SemiPFL(params):
     client_loader = []
     client_labeled_loaders = []
     eval_loader = []
-    server_loaders = torch.utils.data.DataLoader(nodes.server_loaders, batch_size=params.batch_size, shuffle=True)
+    server_loaders = torch.utils.data.DataLoader(nodes.server_loaders,
+                                                 batch_size=params.batch_size,
+                                                 shuffle=True)
 
     for i in range(params.number_of_client):
-        client_loader.append(torch.utils.data.DataLoader(
-            nodes.client_loaders[i], batch_size=params.batch_size, shuffle=True))
-        client_labeled_loaders.append(torch.utils.data.DataLoader(
-            nodes.client_labeled_loaders[i], batch_size=params.batch_size, shuffle=True))
-        eval_loader.append(torch.utils.data.DataLoader(
-            nodes.eval_data[i], batch_size=params.batch_size, shuffle=True))
+        client_loader.append(torch.utils.data.DataLoader(nodes.client_loaders[i],
+                                                         batch_size=params.batch_size,
+                                                         shuffle=True))
+        client_labeled_loaders.append(torch.utils.data.DataLoader(nodes.client_labeled_loaders[i],
+                                                                  batch_size=params.batch_size,
+                                                                  shuffle=True))
+        eval_loader.append(torch.utils.data.DataLoader(nodes.eval_data[i],
+                                                       batch_size=params.batch_size,
+                                                       shuffle=True))
 
 
     # list of generated personalized models for each user
     client_model = []
+    client_AE = []
     for i in range(params.number_of_client):
         client_model.append(model)
+        client_AE.append(AE)
 
     # optimizer and loss functions
-    optimizer_hnet = torch.optim.Adam(params=hnet.parameters(), lr=params.learning_rate)
+    optimizer_hnet = torch.optim.Adam(params=hnet.parameters(),
+                                      lr=params.learning_rate)
 
     criteria_AE = torch.nn.MSELoss()
     criteria_model = torch.nn.NLLLoss()
@@ -117,7 +191,7 @@ def SemiPFL(params):
 
         # produce & load local network weights
         weights = hnet(torch.tensor([client_id], dtype=torch.long).to(params.device))
-        AE.load_state_dict(weights)
+        client_AE[client_id].load_state_dict(weights)
 
         # init inner optimizer
         optimizer_AE = torch.optim.Adam(AE.parameters(), lr=params.inner_lr)
@@ -126,23 +200,21 @@ def SemiPFL(params):
         inner_state = OrderedDict({k: tensor.data for k, tensor in weights.items()})
 
         # NOTE: evaluation on sent model
-        with torch.no_grad():
-            AE.eval()
-            prvs_loss_for_AE = 0
-            for sensor_values, _ in eval_loader[client_id]:
-                sensor_values = sensor_values.view(sensor_values.size(0), -1)
-                predicted_sensor_values = AE(sensor_values.to(params.device).float())
-                prvs_loss_for_AE += criteria_AE(predicted_sensor_values.to(params.device),sensor_values.to(params.device).float()).item() * sensor_values.size(0)
-            prvs_loss_for_AE /= len(eval_loader[client_id].dataset)
+        prvs_loss_for_AE = AE_evaluate(client_AE = client_AE,
+                                       eval_loader = eval_loader,
+                                       number_of_clients = params.number_of_client,
+                                       criteria_AE = criteria_AE,
+                                       general_results = params.general_results,
+                                       id= client_id)
 
         # Step 2: inner updates -> obtaining theta_tilda
-        AE.train()
+        client_AE[client_id].train()
         for i in range(params.inner_step_for_AE):
             optimizer_hnet.zero_grad()
             optimizer_AE.zero_grad()
             for sensor_values, _ in client_loader[client_id]:
                 sensor_values = sensor_values.view(sensor_values.size(0), -1)
-                predicted_sensor_values = AE(sensor_values.to(params.device).float())
+                predicted_sensor_values = client_AE[client_id](sensor_values.to(params.device).float())
                 loss = criteria_AE(predicted_sensor_values.to(params.device).float(),sensor_values.to(params.device).float())
                 loss.backward()
                 optimizer_AE.step()
@@ -151,17 +223,16 @@ def SemiPFL(params):
 
 
         # NOTE: evaluation on sent model
-        with torch.no_grad():
-            AE.eval()
-            prvs_loss_for_AE_updated = 0
-            for sensor_values, _ in eval_loader[client_id]:
-                sensor_values = sensor_values.view(sensor_values.size(0), -1)
-                predicted_sensor_values = AE(sensor_values.to(params.device).float())
-                prvs_loss_for_AE_updated += criteria_AE(predicted_sensor_values.to(params.device),sensor_values.to(params.device).float()).item() * sensor_values.size(0)
-            prvs_loss_for_AE_updated /= len(eval_loader[client_id].dataset)
+        prvs_loss_for_AE_updated = AE_evaluate(client_AE=client_AE,
+                                       eval_loader=eval_loader,
+                                       number_of_clients=params.number_of_client,
+                                       criteria_AE=criteria_AE,
+                                       general_results=params.general_results,
+                                       id=client_id)
 
+        # update hnet
         optimizer_hnet.zero_grad()
-        final_state = AE.state_dict()
+        final_state = client_AE[client_id].state_dict()
 
         # calculating delta theta
         delta_theta = OrderedDict({k: inner_state[k] - final_state[k] for k in weights.keys()})
@@ -183,7 +254,7 @@ def SemiPFL(params):
             client_model[client_id] = model
 
         client_model[client_id].train()
-        AE.eval()
+        client_AE[client_id].eval()
         # init base optimizer
         optimizer_base = torch.optim.Adam(client_model[client_id].parameters(), lr=params.inner_lr)
 
@@ -193,29 +264,25 @@ def SemiPFL(params):
                 sensor_values = sensor_values.view(sensor_values.size(0), -1)
                 # check if the sample is similar to user data
                 if criteria_AE(AE(sensor_values.to(params.device).float()),sensor_values.to(params.device).float()).item() < params.thr:
-                    encoded_sensor_values = AE.encoder(sensor_values.to(params.device).float())
+                    encoded_sensor_values = client_AE[client_id].encoder(sensor_values.to(params.device).float())
                     predicted_activity = client_model[client_id](encoded_sensor_values)
                     loss = criteria_model(predicted_activity.to(params.device), activity.to(params.device))
                     loss.backward()
                     optimizer_base.step()
             #print('model epoch [{}/{}], loss:{:.4f}'.format(i + 1, params.inner_step_for_model, loss.data))
 
-        with torch.no_grad():
-            client_model[client_id].eval()
-            prvs_loss_server_model = 0
-            f1_score_server = 0
-            for sensor_values, activity in eval_loader[client_id]:
-                sensor_values = sensor_values.view(sensor_values.size(0), -1)
-                encoded_sensor_values = AE.encoder(sensor_values.to(params.device).float())
-                predicted_activity = client_model[client_id](encoded_sensor_values)
-                prvs_loss_server_model += criteria_model(predicted_activity, activity.to(params.device)).item() * sensor_values.size(0)
-                f1_score_server += f1_loss(activity, predicted_activity) * sensor_values.size(0)
-            prvs_loss_server_model /= len(eval_loader[client_id].dataset)
-            f1_score_server /= len(eval_loader[client_id].dataset)
+        # Evaluate the model on user dataset
+        prvs_loss_server_model, f1_score_server = model_evaluate(client_AE = client_AE,
+                                                                 client_model = client_model,
+                                                                 eval_loader = eval_loader,
+                                                                 number_of_clients = params.number_of_client,
+                                                                 criteria_model = criteria_model,
+                                                                 general_results = params.general_results,
+                                                                 id = client_id)
 
 
         client_model[client_id].train()
-        AE.eval()
+        client_AE[client_id].eval()
         #for param in client_model[client_id].parameters():
          #   param.requires_grad = False
 
@@ -225,7 +292,7 @@ def SemiPFL(params):
             optimizer_base.zero_grad()
             for sensor_values, activity in client_labeled_loaders[client_id]:
                 sensor_values = sensor_values.view(sensor_values.size(0), -1)
-                encoded_sensor_values = AE.encoder(sensor_values.to(params.device).float())
+                encoded_sensor_values = client_AE[client_id].encoder(sensor_values.to(params.device).float())
                 predicted_activity = client_model[client_id](encoded_sensor_values)
                 loss = criteria_model(predicted_activity, activity.to(params.device))
                 loss.backward()
@@ -233,21 +300,15 @@ def SemiPFL(params):
             #print('modelfine epoch [{}/{}], loss:{:.4f}'.format(i + 1, params.inner_step_for_client, loss.data))
 
         # Evaluate the model on user dataset
-        with torch.no_grad():
-            client_model[client_id].eval()
-            prvs_loss_fine_tuned = 0
-            f1_score_user = 0
-            for sensor_values, activity in eval_loader[client_id]:
-                sensor_values = sensor_values.view(sensor_values.size(0), -1)
-                encoded_sensor_values = AE.encoder(sensor_values.to(params.device).float())
-                encoded_sensor_values = AE.encoder(sensor_values.to(params.device).float())
-                predicted_activity = client_model[client_id](encoded_sensor_values)
-                prvs_loss_fine_tuned += criteria_model(
-                    predicted_activity, activity.to(params.device)).item() * sensor_values.size(0)
-                f1_score_user += f1_loss(activity, predicted_activity) * sensor_values.size(0)
-            client_model[client_id].train()
-            prvs_loss_fine_tuned /= len(eval_loader[client_id].dataset)
-            f1_score_user /= len(eval_loader[client_id].dataset)
+        prvs_loss_fine_tuned, f1_score_user = model_evaluate(client_AE=client_AE,
+                                                                 client_model=client_model,
+                                                                 eval_loader=eval_loader,
+                                                                 number_of_clients=params.number_of_client,
+                                                                 criteria_model=criteria_model,
+                                                                 general_results=params.general_results,
+                                                                 id=client_id)
+
+
         step_iter.set_description(f"S:{step + 1},ID:{client_id},AE:{prvs_loss_for_AE:.4f},AE_f:{prvs_loss_for_AE_updated:.4f},Server_l:{prvs_loss_server_model:.4f},server_f1: {100*f1_score_server:.2f},User_l:{prvs_loss_fine_tuned:.4f},user_f1: {100*f1_score_user:.4f}\n")
 
         # save results

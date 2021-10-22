@@ -23,17 +23,17 @@ class parameters:
         self.trial_number = 0  # which trial we use for this test
         self.label_ratio = 0.01  # ratio of labeled data
         self.eval_ratio = 0.30  # ratio of eval data
-        self.number_of_client = 54  # total number of clients
+        self.number_of_client = 3  # total number of clients
         self.server_ID = [0, 1, 2, 3, 4]  # server ID
         self.batch_size = 128  # training batch size
         self.window_size = 30  # window size (for our case 30)
         self.width = 9  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
         self.total_number_of_clients = 59  # total number of subjects (client + server)
         self.learning_rate = 1e-3  # learning rate for optimizer
-        self.steps = 200  # total number of epochs
+        self.steps = 5  # total number of epochs
         self.inner_step_for_AE = 5  # number of epochs to fine tunne the Autoencoder
         self.inner_step_for_model = 5  # number of steps that server fine tune its model for user
-        self.model_loop = True  # feedback loop for user model
+        self.model_loop = True # feedback loop for user model
         self.inner_step_for_client = 5  # number of steps that user fine tune its model
         self.inner_lr = 1e-3  # user learning rate
         self.inner_wd = 5e-5  # weight decay
@@ -46,7 +46,7 @@ class parameters:
         self.latent_rep = 64 # latent reperesentation size
         self.base_model_hidden_layer = 16 # base model hidden layer size
         self.thr = 0.2 # threshould to find similar datapoints for user
-        self.general_results = True # if True calculate overal values not related to that user
+        self.general_results = False # if True calculate overal values not related to that user
 
 def AE_evaluate(client_AE, eval_loader, number_of_clients, criteria_AE, general_results, id = 0):
     with torch.no_grad():

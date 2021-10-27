@@ -18,19 +18,21 @@ class parameters:
     def __init__(self):
         self.seed = 0
         self.labels_list = ['JOG', 'JUM', 'STD', 'WAL']  # list of activities
-        self.outputdim = len(self.labels_list)
-        self.data_address = os.path.abspath(os.path.join(os.getcwd(), os.pardir)) + "\\Datasets\\MobiNpy_4_Act\\"  # data adress
+        # self.outputdim = len(self.labels_list)
+        self.outputdim = 11
+        # self.data_address = os.path.abspath(os.path.join(os.getcwd(), os.pardir)) + "\\Datasets\\MobiNpy_4_Act\\"  # data adress
+        self.data_address = os.path.abspath(os.path.join(os.getcwd(), os.pardir)) + "\\Datasets\\MobiNpy_V2\\"  # data adress
         self.trial_number = 0  # which trial we use for this test
         self.label_ratio = 0.01  # ratio of labeled data
         self.eval_ratio = 0.30  # ratio of eval data
-        self.number_of_client = 3  # total number of clients
+        self.number_of_client = 1  # total number of clients
         self.server_ID = [0, 1, 2, 3, 4]  # server ID
         self.batch_size = 128  # training batch size
         self.window_size = 30  # window size (for our case 30)
         self.width = 9  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
         self.total_number_of_clients = 59  # total number of subjects (client + server)
         self.learning_rate = 1e-3  # learning rate for optimizer
-        self.steps = 5  # total number of epochs
+        self.steps = 10  # total number of epochs
         self.inner_step_for_AE = 5  # number of epochs to fine tunne the Autoencoder
         self.inner_step_for_model = 5  # number of steps that server fine tune its model for user
         self.model_loop = True # feedback loop for user model

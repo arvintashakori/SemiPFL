@@ -25,8 +25,8 @@ class parameters:
         self.trial_number = 0  # which trial we use for this test
         self.label_ratio = 0.1  # ratio of labeled data
         self.eval_ratio = 0.30  # ratio of eval data
-        self.number_of_client = 54  # total number of clients
-        self.server_ID = [0, 1, 2, 3, 4]  # server ID
+        self.number_of_client = 50  # total number of clients
+        self.server_ID = [0, 1, 2, 3, 4, 5, 6, 7, 8]  # server ID
         self.batch_size = 128  # training batch size
         self.window_size = 30  # window size (for our case 30)
         self.width = 9  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
@@ -35,7 +35,7 @@ class parameters:
         self.steps = 200  # total number of epochs
         self.inner_step_for_AE = 5  # number of epochs to fine tunne the Autoencoder
         self.inner_step_for_model = 5  # number of steps that server fine tune its model for user
-        self.model_loop = True # feedback loop for user model
+        self.model_loop = False # feedback loop for user model
         self.inner_step_for_client = 5  # number of steps that user fine tune its model
         self.inner_lr = 1e-3  # user learning rate
         self.inner_wd = 5e-5  # weight decay
@@ -47,10 +47,10 @@ class parameters:
         self.AE_layer_2 = 128 # Autoencoder hidden layer 2 size
         self.latent_rep = 64 # latent reperesentation size
         self.base_model_hidden_layer = 16 # base model hidden layer size
-        self.thr = 0.2 # threshould to find similar datapoints for user
-        self.general_results = True # if True calculate overal values not related to that user
+        self.thr = 0.01 # threshould to find similar datapoints for user
+        self.general_results = False # if True calculate overal values not related to that user
 
-def AE_evaluate(client_AE, eval_loader, number_of_clients, criteria_AE, general_results, id = 0):
+def AE_evaluate(client_AE, eval_loader, number_of_clients, criteria_AE, general_results, params, id = 0):
     with torch.no_grad():
         total_loss = 0
         if general_results:
@@ -77,7 +77,7 @@ def AE_evaluate(client_AE, eval_loader, number_of_clients, criteria_AE, general_
         return total_loss
 
 
-def model_evaluate(client_AE, client_model, eval_loader, number_of_clients, criteria_model, general_results, id = 0):
+def model_evaluate(client_AE, client_model, eval_loader, number_of_clients, criteria_model, general_results, params, id = 0):
     with torch.no_grad():
         total_loss = 0
         total_f1 = 0
@@ -207,7 +207,8 @@ def SemiPFL(params):
                                        number_of_clients = params.number_of_client,
                                        criteria_AE = criteria_AE,
                                        general_results = params.general_results,
-                                       id= client_id)
+                                       id= client_id,
+                                       params = params)
 
         # Step 2: inner updates -> obtaining theta_tilda
         client_AE[client_id].train()
@@ -230,7 +231,8 @@ def SemiPFL(params):
                                        number_of_clients=params.number_of_client,
                                        criteria_AE=criteria_AE,
                                        general_results=params.general_results,
-                                       id=client_id)
+                                       id=client_id,
+                                       params = params)
 
         # update hnet
         optimizer_hnet.zero_grad()
@@ -280,7 +282,8 @@ def SemiPFL(params):
                                                                  number_of_clients = params.number_of_client,
                                                                  criteria_model = criteria_model,
                                                                  general_results = params.general_results,
-                                                                 id = client_id)
+                                                                 id = client_id,
+                                                                 params = params)
 
 
         client_model[client_id].train()
@@ -308,7 +311,8 @@ def SemiPFL(params):
                                                                  number_of_clients=params.number_of_client,
                                                                  criteria_model=criteria_model,
                                                                  general_results=params.general_results,
-                                                                 id=client_id)
+                                                                 id=client_id,
+                                                                 params = params)
 
 
         step_iter.set_description(f"S:{step + 1},ID:{client_id},AE:{prvs_loss_for_AE:.4f},AE_f:{prvs_loss_for_AE_updated:.4f},Server_l:{prvs_loss_server_model:.4f},server_f1: {100*f1_score_server:.2f},User_l:{prvs_loss_fine_tuned:.4f},user_f1: {100*f1_score_user:.4f}\n")

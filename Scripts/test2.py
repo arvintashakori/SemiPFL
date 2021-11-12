@@ -15,9 +15,9 @@ if __name__ == '__main__':
     params.server_ID = [0, 1, 2, 3, 4, 5, 6, 7, 8]  # server ID
 
     f1 = defaultdict(list)
-    for dim in range(1): # 0: 4 tasks, 1: 11 tasks
-        for num_clients in range(50,51): # number of clients from 1 to 50
-            for labeled_ratio in range(1,8): # percentage of labeled dataset in the target
+    for dim in range(1,2): # 0: 4 tasks, 1: 11 tasks
+        for num_clients in range(5,51,5): # number of clients from 1 to 50
+            for labeled_ratio in range(5,8): # percentage of labeled dataset in the target
                 params.outputdim = output_dim[dim][0]
                 params.data_address = output_dim[dim][1]
                 params.number_of_client = num_clients

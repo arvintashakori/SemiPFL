@@ -59,7 +59,7 @@ def assign_loaders(address, trial_number, label_ratio, eval_ratio, server_ID, wi
     num_user_list = range(num_user)
     for server in server_ID:
         file_name = address + 'user' + \
-                            str(server) + 'trail_' + str(trial_number) + '.npy'
+                            str(server) + '_trail' + str(trial_number) + '.npy'
         # file_name = address + str(server) + 'trail_' + str(trial_number) + '.npy'
         server_data.append(np.load(file_name, mmap_mode='r'))
     server_loaders = DatasetFromNPY(np.array(list(itertools.chain.from_iterable(server_data))),
@@ -75,7 +75,7 @@ def assign_loaders(address, trial_number, label_ratio, eval_ratio, server_ID, wi
     for user in num_user_list:  # return a list of user data and shuffle each user's data before return
         # file_name = address + str(user) + 'trail_' + str(trial_number) + '.npy'
         file_name = address + 'user' + \
-                    str(user) + 'trail_' + str(trial_number) + '.npy'
+                    str(user) + '_trail' + str(trial_number) + '.npy'
         client_data = np.load(file_name, mmap_mode='r')
         client_data = np.array(client_data)
         np.random.shuffle(client_data)

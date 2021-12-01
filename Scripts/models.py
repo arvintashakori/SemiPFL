@@ -7,7 +7,7 @@ t.manual_seed(0)
 
 
 class HN(nn.Module):
-    def __init__(self, n_nodes, embedding_dim, hidden_dim = 10, n_hidden = 1):
+    def __init__(self, n_nodes, embedding_dim, hidden_dim = 10, n_hidden = 1, inout_dim=30*9):
         super().__init__()
 
         self.embeddings = nn.Embedding(num_embeddings=n_nodes, embedding_dim=embedding_dim)
@@ -16,7 +16,8 @@ class HN(nn.Module):
             layers.append(nn.ReLU(inplace=True))
             layers.append(nn.Linear(hidden_dim, hidden_dim),)
         self.mlp = nn.Sequential(*layers)
-        self.E1_weights = nn.Linear(hidden_dim, 256 * 270)
+        self.inout_dim=inout_dim
+        self.E1_weights = nn.Linear(hidden_dim, 256 * inout_dim) #270
         self.E1_bias = nn.Linear(hidden_dim, 256 * 1)
         self.E2_weights = nn.Linear(hidden_dim, 128 * 256)
         self.E2_bias = nn.Linear(hidden_dim, 128 * 1)
@@ -26,15 +27,15 @@ class HN(nn.Module):
         self.D1_bias = nn.Linear(hidden_dim, 128 * 1)
         self.D2_weights = nn.Linear(hidden_dim, 256 * 128)
         self.D2_bias = nn.Linear(hidden_dim, 256 * 1)
-        self.D3_weights = nn.Linear(hidden_dim, 270 * 256)
-        self.D3_bias = nn.Linear(hidden_dim, 270 * 1)
+        self.D3_weights = nn.Linear(hidden_dim, inout_dim * 256)
+        self.D3_bias = nn.Linear(hidden_dim, inout_dim * 1)
 
 
     def forward(self, idx):
         emd = self.embeddings(idx)
         features = self.mlp(emd)
         weights = OrderedDict({
-            "E1.weight": self.E1_weights(features).view(256, 270),
+            "E1.weight": self.E1_weights(features).view(256, self.inout_dim), #270
             "E1.bias": self.E1_bias(features).view(-1),
             "E2.weight": self.E2_weights(features).view(128, 256),
             "E2.bias": self.E2_bias(features).view(-1),
@@ -44,7 +45,7 @@ class HN(nn.Module):
             "D1.bias": self.D1_bias(features).view(-1),
             "D2.weight": self.D2_weights(features).view(256, 128),
             "D2.bias": self.D2_bias(features).view(-1),
-            "D3.weight": self.D3_weights(features).view(270, 256),
+            "D3.weight": self.D3_weights(features).view(self.inout_dim, 256),#270
             "D3.bias": self.D3_bias(features).view(-1)
         })
         return weights

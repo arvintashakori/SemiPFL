@@ -22,7 +22,8 @@ class parameters:
         self.outputdim = 10
         # self.data_address = os.path.abspath(os.path.join(os.getcwd(), os.pardir)) + "\\Datasets\\MobiNpy_4_Act\\"  # data adress for 5 activity
         #elf.data_address = os.path.abspath(os.path.join(os.getcwd(), os.pardir)) + "\\Datasets\\MobiNpy_V2\\"  # data adress # data address for 11 activity
-        self.data_address = os.path.abspath( os.path.join(os.getcwd(), os.pardir)) + "\\Datasets\\PAMAP2_V1\\Protocol\\"  # data adress
+        # self.data_address = os.path.abspath( os.path.join(os.getcwd(), os.pardir)) + "\\Datasets\\PAMAP2_V1\\Protocol\\"  # data adress
+        self.data_address = r'C:\Users\walke\Documents\GitHub\SemiPFL_Wenwen\Dataset\PAMAP2_V1\Protocol\\'
         self.trial_number = 0  # which trial we use for this test
         self.label_ratio = 0.1  # ratio of labeled data
         self.eval_ratio = 0.30  # ratio of eval data
@@ -123,7 +124,8 @@ def SemiPFL(params):
     hnet = HN(n_nodes = params.number_of_client,
               embedding_dim = int(1 + params.number_of_client / 4),
               hidden_dim = 100,
-              n_hidden = 10)  # initializing the hypernetwork
+              n_hidden = 10,
+              inout_dim=params.width * params.window_size)  # initializing the hypernetwork
 
     AE = Autoencoder(inout_dim = params.width * params.window_size,
                      layer1 = params.AE_layer_1,

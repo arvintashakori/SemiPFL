@@ -24,13 +24,13 @@ class parameters:
         #elf.data_address = os.path.abspath(os.path.join(os.getcwd(), os.pardir)) + "\\Datasets\\MobiNpy_V2\\"  # data adress # data address for 11 activity
 
         # ['Mobiact', 'WISDM', 'HHAR', 'PAMAP2']
-        self.data_type='WISDM'
+        self.data_type='PAMAP2'
         # self.data_address = r'C:\Users\walke\Documents\GitHub\SemiPFL_Wenwen\Dataset\HHAR_data_1\Watch\\'
         self.label_ratio = 0.001  # ratio of labeled data
         self.eval_ratio = 0.30  # ratio of eval data
-        self.number_of_client = 2  # total number of clients
+        self.number_of_client = 1  # total number of clients
         #self.server_ID = [0, 1, 2, 3, 4, 5, 6, 7, 8]  # server ID
-        self.server_ID = [0]  # server ID
+        self.server_ID = [0,1,2,3,4,5]  # server ID
         self.batch_size = 128  # training batch size
         self.window_size = 30  # window size (for our case 30)
         if self.data_type=='Mobiact':
@@ -38,13 +38,13 @@ class parameters:
             self.total_number_of_clients = 59  # total number of subjects (client + server)
             self.outputdim = 4  #11
             self.trial_number = 6  # which trial we use for this test
-            self.data_address = r'C:\Users\walke\Documents\GitHub\SemiPFL_Wenwen\Dataset\Mobiact\\'  # WISDM
+            self.data_address = os.path.abspath(os.path.join(os.getcwd(), os.pardir)) + "\\Datasets\\\Mobiact\\" # WISDM
         if self.data_type=='WISDM':
             self.width = 6  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
             self.total_number_of_clients = 51  # total number of subjects (client + server)
             self.outputdim = 5
             self.trial_number = 0  # which trial we use for this test
-            self.data_address = r'C:\Users\walke\Documents\GitHub\SemiPFL_Wenwen\Dataset\WISDM\phone\\'  # WISDM
+            self.data_address = os.path.abspath(os.path.join(os.getcwd(), os.pardir)) + "\\Datasets\\WISDM\phone\\" # WISDM
         if self.data_type=='HHAR':
             self.width = 6  # data dimension (AX, AY, AZ) (GX, GY, GZ) (MX, MY, MZ)
             self.total_number_of_clients = 20  # total number of subjects (client + server)
@@ -60,7 +60,7 @@ class parameters:
         self.steps = 20  # total number of epochs
         self.inner_step_for_AE = 5  # number of epochs to fine tunne the Autoencoder
         self.inner_step_for_model = 5  # number of steps that server fine tune its model for user
-        self.model_loop = True # feedback loop for user model
+        self.model_loop = False # feedback loop for user model
         self.inner_step_for_client = 5  # number of steps that user fine tune its model
         self.inner_lr = 1e-3  # user learning rate
         self.inner_wd = 5e-5  # weight decay

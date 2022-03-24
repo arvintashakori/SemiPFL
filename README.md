@@ -1,5 +1,5 @@
 ## SemiPFL: Personalized Semi-Supervised Federated Learning Framework for Edge Intelligence
-This is an official implementation of ***SemiPFL*** paper. [[Link]](https://arxiv.org/abs/2103.04628)
+This is an official implementation of ***SemiPFL*** paper. [[Link]](https://arxiv.org/abs/2203.08176)
 
 ![](resources/sys_model.png)
 

@@ -1,4 +1,4 @@
-## SemiPFL: Personalized Semi-Supervised Federated Learning Framework for Wearable Systems
+## SemiPFL: Personalized Semi-Supervised Federated Learning Framework for Edge Intelligence
 This is an official implementation of ***SemiPFL*** paper.
 
 #### Installation

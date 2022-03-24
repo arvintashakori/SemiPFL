@@ -1,5 +1,7 @@
 ## SemiPFL: Personalized Semi-Supervised Federated Learning Framework for Edge Intelligence
-This is an official implementation of ***SemiPFL*** paper.
+This is an official implementation of ***SemiPFL*** paper. [[Link]](https://arxiv.org/abs/2103.04628)
+
+![](resources/sys_model.png)
 
 #### Installation
 - Create a virtual environment with conda/virtualenv

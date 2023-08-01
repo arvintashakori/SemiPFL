@@ -1,5 +1,6 @@
 ## SemiPFL: Personalized Semi-Supervised Federated Learning Framework for Edge Intelligence
 This is an official implementation of ***SemiPFL*** paper. [[Link]](https://arxiv.org/abs/2203.08176)
+
 Published in IEEE Internet of Things Journal, 2023 [[Link]](https://ieeexplore.ieee.org/abstract/document/10012038)
 
 ![](sys_model.png)

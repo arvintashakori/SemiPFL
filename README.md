@@ -12,6 +12,6 @@ This is an official implementation of ***SemiPFL*** paper. [[Link]](https://arxi
 ---------
 
 #### Reproduce Paper Results
-- Upload datasets to ```Dataset```
+- Upload datasets to ```Datasets```
 - Run: ```cd Scripts```
 - Run: ```python semipfl.py```

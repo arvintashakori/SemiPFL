@@ -12,8 +12,6 @@ This is an official implementation of ***SemiPFL*** paper. [[Link]](https://arxi
 ---------
 
 #### Reproduce Paper Results
-
----------
-##### SemiPFL Results on MOBIACT
+- Upload datasets to ```Dataset```
 - Run: ```cd Scripts```
 - Run: ```python semipfl.py```

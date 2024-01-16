@@ -17,3 +17,16 @@ Published in IEEE Internet of Things Journal, 2023 [[Link]](https://ieeexplore.i
 - Upload datasets to ```Datasets```
 - Run: ```cd Scripts```
 - Run: ```python semipfl.py```
+
+#### Bibtex
+If you find this code useful in your research, please cite:
+
+```
+@article{tashakori2023semipfl,
+  title={SemiPFL: personalized semi-supervised federated learning framework for edge intelligence},
+  author={Tashakori, Arvin and Zhang, Wenwen and Wang, Z Jane and Servati, Peyman},
+  journal={IEEE Internet of Things Journal},
+  year={2023},
+  publisher={IEEE}
+}
+```
